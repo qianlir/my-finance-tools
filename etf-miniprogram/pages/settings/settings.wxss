@@ -1,0 +1,111 @@
+/* pages/settings/settings.wxss */
+.container {
+  padding: 16px;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1a73e8;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.steps {
+  background: #f0f7ff;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.step {
+  font-size: 13px;
+  color: #555;
+  line-height: 22px;
+  padding-left: 8px;
+}
+
+.cookie-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 11px;
+  box-sizing: border-box;
+  font-family: monospace;
+}
+
+.status-row {
+  margin-top: 8px;
+}
+
+.status {
+  font-size: 13px;
+}
+
+.status.ok {
+  color: #43a047;
+}
+
+.status.pending {
+  color: #ef6c00;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  border: none;
+}
+
+.btn-primary {
+  background: #1a73e8;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #43a047;
+  color: #fff;
+}
+
+.btn-danger {
+  background: #e53935;
+  color: #fff;
+}
+
+.hints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #666;
+  line-height: 18px;
+}

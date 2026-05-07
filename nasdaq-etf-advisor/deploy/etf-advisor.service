@@ -1,0 +1,15 @@
+[Unit]
+Description=ETF Premium Analysis Update Daemon
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/etf-advisor
+ExecStart=/opt/etf-advisor/venv/bin/python /opt/etf-advisor/scripts/etf_server.py --interval 60
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/etf-advisor/data/server.log
+StandardError=append:/opt/etf-advisor/data/server.log
+
+[Install]
+WantedBy=multi-user.target

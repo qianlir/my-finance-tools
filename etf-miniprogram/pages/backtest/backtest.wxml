@@ -1,0 +1,88 @@
+<!--pages/backtest/backtest.wxml-->
+<wxs src="../../utils/format.wxs" module="fmt" />
+
+<view class="container">
+  <!-- 表单区 -->
+  <view class="form-card">
+    <view class="form-row">
+      <text class="label">起始日期</text>
+      <picker mode="date" value="{{startDate}}" start="2020-01-01" end="{{backtestData.backtest_period.end || ''}}" bindchange="onStartDateChange">
+        <view class="picker">{{startDate}}</view>
+      </picker>
+    </view>
+    <view class="form-row">
+      <text class="label">指数类型</text>
+      <picker range="{{indexNames}}" range-key="{{indexType}}" bindchange="onIndexChange">
+        <view class="picker">{{indexNames[indexType]}}</view>
+      </picker>
+    </view>
+    <button class="btn-start" bindtap="startBacktest" disabled="{{loading}}">
+      {{loading ? '计算中...' : '开始回测'}}
+    </button>
+  </view>
+
+  <!-- 结果卡片 -->
+  <view wx:if="{{backtestData}}" class="result-section">
+    <view class="period-info">
+      <text>回测周期: {{backtestData.backtest_period.start}} ~ {{backtestData.backtest_period.end}}</text>
+      <text>交易日: {{backtestData.backtest_period.trading_days}}天</text>
+      <text>初始资金: ¥{{backtestData.initial_capital}}</text>
+    </view>
+
+    <view wx:for="{{backtestData.sections}}" wx:key="index_type" class="section">
+      <view class="section-title">{{item.index_name}}ETF 回测结果</view>
+
+      <!-- 策略对比表 -->
+      <view class="strategies-table">
+        <view class="table-row header">
+          <view class="cell">策略</view>
+          <view class="cell">收益率</view>
+          <view class="cell">最大回撤</view>
+          <view class="cell">换仓次数</view>
+          <view class="cell">最终值</view>
+        </view>
+
+        <view wx:for="{{item.strategies}}" wx:for-item="strategy" wx:for-index="s_idx" wx:key="name" class="table-row">
+          <view class="cell name">{{strategy.display_name}}</view>
+          <view class="cell {{strategy.return_pct >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(strategy.return_pct)}}</view>
+          <view class="cell green">{{fmt.formatPercent(strategy.max_drawdown)}}</view>
+          <view class="cell">{{strategy.trade_count}}次</view>
+          <view class="cell">¥{{strategy.final_value}}</view>
+        </view>
+      </view>
+
+      <!-- 买入持有对比 -->
+      <view class="subsection-title">买入持有对比</view>
+      <view class="etf-table">
+        <view class="table-row header">
+          <view class="cell">代码</view>
+          <view class="cell">名称</view>
+          <view class="cell">收益率</view>
+          <view class="cell">最大回撤</view>
+        </view>
+        <view wx:for="{{item.buy_hold_etfs}}" wx:for-item="etf" wx:for-index="e_idx" wx:key="code" class="table-row">
+          <view class="cell code">{{etf.code}}</view>
+          <view class="cell name">{{etf.name}}</view>
+          <view class="cell {{etf.return_pct >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(etf.return_pct)}}</view>
+          <view class="cell green">{{fmt.formatPercent(etf.max_drawdown)}}</view>
+        </view>
+      </view>
+
+      <!-- 最佳 ETF -->
+      <view wx:if="{{item.best_etf}}" class="best-etf-card">
+        <text>最佳单ETF: {{item.best_etf.name}} ({{item.best_etf.code}})</text>
+        <text class="return {{item.best_etf.return_pct >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(item.best_etf.return_pct)}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{!backtestData && !loading}}" class="empty-state">
+    <text>点击「开始回测」查看结果</text>
+  </view>
+
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading">
+    <text>计算中，请稍候...</text>
+  </view>
+</view>

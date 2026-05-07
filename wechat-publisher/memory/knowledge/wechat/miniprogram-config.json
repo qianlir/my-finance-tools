@@ -1,0 +1,6 @@
+{
+  "app_id": "wx7960850f4a650fe4",
+  "app_secret_env": "WECHAT_MINIPROGRAM_SECRET",
+  "name": "ETF溢价分析",
+  "description": "纳指/标普ETF溢价分析报告小程序"
+}

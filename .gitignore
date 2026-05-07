@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.pyo
+*.png
+*.db
+*.sqlite
+.env
+.DS_Store
+.playwright-mcp/
+
+# 生成的数据文件
+nasdaq-etf-advisor/data/report.*
+nasdaq-etf-advisor/data/*.log
+nasdaq-etf-advisor/data/history/
+nasdaq-etf-advisor/data/backtest.*
+nasdaq-etf-advisor/data/holdings*
+nasdaq-etf-advisor/data/futures_data.json
+nasdaq-etf-advisor/reports/img/
+
+# 微信发布产物
+**/articles/
+nasdaq-etf-advisor/scripts/wechat-publisher/
+
+# 小程序
+etf-miniprogram/project.private.config.json

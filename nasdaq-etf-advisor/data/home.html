@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF投资助手 — 首页</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: #f8f9fa; padding: 16px; }
+  .header { text-align: center; margin-bottom: 20px; }
+  .title { font-size: 22px; font-weight: bold; color: #1a73e8; }
+  .subtitle { font-size: 12px; color: #999; margin-top: 4px; cursor: pointer; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; }
+  .card:hover { transform: scale(0.99); }
+  .card-header { display: flex; align-items: center; margin-bottom: 12px; }
+  .icon { font-size: 24px; margin-right: 8px; }
+  .card-title { flex: 1; font-size: 17px; font-weight: bold; }
+  .arrow { color: #1a73e8; }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; }
+  .label { font-size: 14px; color: #666; }
+  .value { font-size: 15px; font-weight: bold; }
+  .hint { font-size: 12px; color: #999; }
+  .red { color: #e53935; }
+  .green { color: #43a047; }
+  .card-footer { padding-top: 8px; border-top: 1px solid #f0f0f0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="title">ETF 投资助手</div>
+  <div class="subtitle" onclick="location.reload()">最后更新: <span id="updateTime">--</span> 🔄</div>
+</div>
+
+<div class="card" onclick="location.href='preview.html'">
+  <div class="card-header">
+    <span class="icon">📊</span>
+    <span class="card-title">实时溢价分析</span>
+    <span class="arrow">→</span>
+  </div>
+  <div class="row">
+    <span class="label">纳指期货</span>
+    <span class="value" id="nq">--</span>
+  </div>
+  <div class="row">
+    <span class="label">标普期货</span>
+    <span class="value" id="es">--</span>
+  </div>
+  <div class="card-footer">
+    <span class="hint">查看各 ETF 溢价率与推荐</span>
+  </div>
+</div>
+
+<div class="card" onclick="location.href='backtest.html'">
+  <div class="card-header">
+    <span class="icon">📈</span>
+    <span class="card-title">策略回测</span>
+    <span class="arrow">→</span>
+  </div>
+  <div class="row">
+    <span class="label">策略A (每日换仓)</span>
+    <span class="value" id="strategyA">--</span>
+  </div>
+  <div class="row">
+    <span class="label">策略B (阈值>0.5)</span>
+    <span class="value" id="strategyB">--</span>
+  </div>
+  <div class="row">
+    <span class="label">最大回撤</span>
+    <span class="value green" id="drawdown">--</span>
+  </div>
+  <div class="card-footer">
+    <span class="hint">查看历史回测结果与收益对比</span>
+  </div>
+</div>
+
+<div class="card" onclick="location.href='holdings.html'">
+  <div class="card-header">
+    <span class="icon">💼</span>
+    <span class="card-title">持仓换仓</span>
+    <span class="arrow">→</span>
+  </div>
+  <div style="text-align: center; padding: 12px;">
+    <span class="hint">配置Cookie后获取个性化建议</span>
+  </div>
+  <div class="card-footer">
+    <span class="hint">查看持仓与换仓建议</span>
+  </div>
+</div>
+
+<div style="text-align: center; padding: 20px; font-size: 11px; color: #bbb;">
+  以上内容仅供参考，不构成投资建议
+</div>
+
+<script>
+function load() {
+  // 加载报告数据
+  fetch('/report.json?t=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('updateTime').textContent = data.generated_at || '--';
+      if (data.futures && data.futures.length > 0) {
+        const f = data.futures[data.futures.length - 1];
+        const nqCls = f.nq_change >= 0 ? 'red' : 'green';
+        const esCls = f.es_change >= 0 ? 'red' : 'green';
+        document.getElementById('nq').className = 'value ' + nqCls;
+        document.getElementById('nq').textContent = `${f.nq_price} (${f.nq_change >= 0 ? '+' : ''}${f.nq_change.toFixed(2)}%)`;
+        document.getElementById('es').className = 'value ' + esCls;
+        document.getElementById('es').textContent = `${f.es_price} (${f.es_change >= 0 ? '+' : ''}${f.es_change.toFixed(2)}%)`;
+      }
+    });
+
+  // 加载回测数据
+  fetch('/backtest.json?t=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      let sa = 0, sb = 0, dd = 0;
+      data.sections.forEach(s => {
+        s.strategies.forEach(st => {
+          if (st.name === 'STRATEGY_A') { sa = st.return_pct; dd = st.max_drawdown; }
+          if (st.name === 'STRATEGY_B') sb = st.return_pct;
+        });
+      });
+      const saCls = sa >= 0 ? 'red' : 'green';
+      const sbCls = sb >= 0 ? 'red' : 'green';
+      document.getElementById('strategyA').className = 'value ' + saCls;
+      document.getElementById('strategyA').textContent = (sa >= 0 ? '+' : '') + sa.toFixed(2) + '%';
+      document.getElementById('strategyB').className = 'value ' + sbCls;
+      document.getElementById('strategyB').textContent = (sb >= 0 ? '+' : '') + sb.toFixed(2) + '%';
+      document.getElementById('drawdown').textContent = (dd >= 0 ? '+' : '') + dd.toFixed(2) + '%';
+    });
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

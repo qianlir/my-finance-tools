@@ -1,0 +1,12 @@
+/* 全局样式 */
+page {
+  background: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+/* 中国市场：红涨绿跌 */
+.red { color: #e53935; }
+.green { color: #43a047; }
+.neutral { color: #666; }

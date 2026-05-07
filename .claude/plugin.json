@@ -1,0 +1,12 @@
+{
+  "name": "money",
+  "description": "个人投资工具箱 — 包含 ETF 换仓顾问等智能投资分析 skill",
+  "version": "1.0.0",
+  "author": {
+    "name": "Luke"
+  },
+  "components": {
+    "nasdaq-etf-advisor": "1.0.0",
+    "etf-evaluator": "1.0.0"
+  }
+}

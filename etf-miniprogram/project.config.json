@@ -1,0 +1,14 @@
+{
+  "appid": "wx7960850f4a650fe4",
+  "projectname": "etf-miniprogram",
+  "compileType": "miniprogram",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "minified": true,
+    "urlCheck": true,
+    "postcss": true
+  },
+  "libVersion": "3.3.4",
+  "description": "ETF溢价分析报告"
+}

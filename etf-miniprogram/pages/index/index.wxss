@@ -1,0 +1,130 @@
+/* pages/index/index.wxss */
+.container {
+  padding: 16px;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  display: block;
+  font-size: 22px;
+  font-weight: bold;
+  color: #1a73e8;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #999;
+}
+
+/* 卡片通用样式 */
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.card:active {
+  transform: scale(0.98);
+  transition: transform 0.1s;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.icon {
+  font-size: 24px;
+  margin-right: 8px;
+}
+
+.card-title {
+  flex: 1;
+  font-size: 17px;
+  font-weight: bold;
+  color: #333;
+}
+
+.arrow {
+  font-size: 18px;
+  color: #1a73e8;
+}
+
+.card-body {
+  margin-bottom: 8px;
+}
+
+.card-footer {
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.hint {
+  font-size: 12px;
+  color: #999;
+}
+
+/* 报告卡片 */
+.futures-row, .strategy-row, .drawdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.label {
+  font-size: 14px;
+  color: #666;
+}
+
+.value {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* 持仓卡片 */
+.holdings-status {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.status-ok {
+  display: block;
+  font-size: 14px;
+  color: #43a047;
+  font-weight: bold;
+}
+
+.status-pending {
+  display: block;
+  font-size: 14px;
+  color: #ef6c00;
+}
+
+.count {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* 底部提示 */
+.footer-hint {
+  text-align: center;
+  padding: 20px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.red { color: #e53935; }
+.green { color: #43a047; }

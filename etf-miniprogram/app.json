@@ -1,0 +1,32 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/report/report",
+    "pages/backtest/backtest",
+    "pages/holdings/holdings",
+    "pages/settings/settings"
+  ],
+  "tabBar": {
+    "color": "#666",
+    "selectedColor": "#1a73e8",
+    "backgroundColor": "#fff",
+    "borderStyle": "white",
+    "list": [
+      {"pagePath": "pages/index/index", "text": "首页"},
+      {"pagePath": "pages/report/report", "text": "溢价"},
+      {"pagePath": "pages/backtest/backtest", "text": "回测"},
+      {"pagePath": "pages/holdings/holdings", "text": "持仓"}
+    ]
+  },
+  "window": {
+    "navigationBarTitleText": "ETF投资助手",
+    "navigationBarBackgroundColor": "#1a73e8",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f8f9fa",
+    "backgroundTextStyle": "dark"
+  },
+  "networkTimeout": {
+    "request": 10000
+  },
+  "sitemapLocation": "sitemap.json"
+}

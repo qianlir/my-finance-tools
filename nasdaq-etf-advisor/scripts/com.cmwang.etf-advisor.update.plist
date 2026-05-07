@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cmwang.etf-advisor.update</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-c</string>
+        <string>source /Users/cmwang/.zshrc &amp;&amp; /Users/cmwang/work/money/nasdaq-etf-advisor/scripts/local_scheduled_update.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <integer>600</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cmwang/work/money/nasdaq-etf-advisor/data/scheduled.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cmwang/work/money/nasdaq-etf-advisor/data/scheduled.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,107 @@
+<wxs src="../../utils/format.wxs" module="fmt" />
+
+<!-- 加载中 -->
+<view class="loading" wx:if="{{loading}}">
+  <text>加载中...</text>
+</view>
+
+<!-- 错误状态 -->
+<view class="error" wx:if="{{error && !loading}}">
+  <text>{{error}}</text>
+</view>
+
+<!-- 主内容 -->
+<view class="container" wx:if="{{report && !loading}}">
+
+  <!-- 标题栏 -->
+  <view class="header">
+    <text class="title">ETF溢价分析报告 {{report.date}}</text>
+    <text class="updated">{{lastUpdated}}</text>
+  </view>
+
+  <!-- 期货数据 -->
+  <view class="card futures-section">
+    <view class="futures-row" wx:for="{{report.futures}}" wx:key="date">
+      <text class="futures-label">期货 {{item.date}}:</text>
+      <text class="{{fmt.colorClass(item.nq_change)}}">NQ {{fmt.formatInt(item.nq_price)}} ({{fmt.formatPercent(item.nq_change)}})</text>
+      <text class="divider"> | </text>
+      <text class="{{fmt.colorClass(item.es_change)}}">ES {{fmt.formatInt(item.es_price)}} ({{fmt.formatPercent(item.es_change)}})</text>
+    </view>
+    <view class="freshness" wx:if="{{report.data_freshness}}">
+      <text>{{report.data_freshness}}</text>
+    </view>
+  </view>
+
+  <!-- 各指数分析 -->
+  <block wx:for="{{report.sections}}" wx:key="index_type" wx:for-item="section">
+    <view class="card section">
+      <text class="section-title">{{section.index_name}}ETF 分析</text>
+
+      <!-- 表格：固定首列 + 横向滑动 -->
+      <view class="table-wrapper">
+        <!-- 固定列：代码 -->
+        <view class="fixed-col">
+          <view class="cell th fixed-th">代码</view>
+          <view class="cell fixed-td" wx:for="{{section.etfs}}" wx:for-item="etf" wx:key="code">
+            <text class="code-text">{{etf.code}}</text>
+          </view>
+        </view>
+
+        <!-- 滚动列 -->
+        <scroll-view scroll-x="true" class="scroll-area" enhanced="true" show-scrollbar="false">
+          <view class="scroll-inner">
+            <!-- 表头 -->
+            <view class="row header-row">
+              <view class="cell th">价格</view>
+              <view class="cell th">涨幅</view>
+              <view class="cell th">{{section.premium_col_name}}</view>
+              <view class="cell th wide">3M超额(均值)</view>
+              <view class="cell th wide">6M超额(均值)</view>
+              <view class="cell th wide">1Y超额(均值)</view>
+              <view class="cell th">综合超额</view>
+              <view class="cell th">1Y净值</view>
+              <view class="cell th narrow">>7%天</view>
+              <view class="cell th narrow">分值</view>
+              <view class="cell th rec-col">推荐</view>
+            </view>
+
+            <!-- 数据行 -->
+            <view class="row data-row {{fmt.recClass(etf.stars)}}" wx:for="{{section.etfs}}" wx:for-item="etf" wx:key="code">
+              <view class="cell td">{{fmt.formatPrice(etf.price)}}</view>
+              <view class="cell td {{fmt.colorClass(etf.change)}}">{{fmt.formatPercent(etf.change)}}</view>
+              <view class="cell td {{fmt.colorClass(etf.display_premium)}}">{{fmt.formatPercent(etf.display_premium)}}</view>
+              <view class="cell td wide {{fmt.colorClass(etf.excess_3m)}}">{{fmt.excessWithAvg(etf.excess_3m, etf.avg_3m)}}</view>
+              <view class="cell td wide {{fmt.colorClass(etf.excess_6m)}}">{{fmt.excessWithAvg(etf.excess_6m, etf.avg_6m)}}</view>
+              <view class="cell td wide {{fmt.colorClass(etf.excess_1y)}}">{{fmt.excessWithAvg(etf.excess_1y, etf.avg_1y)}}</view>
+              <view class="cell td {{fmt.colorClass(etf.composite)}}">{{fmt.formatPercent(etf.composite)}}</view>
+              <view class="cell td {{fmt.colorClass(etf.nav_return_1y)}}">{{fmt.formatPercent(etf.nav_return_1y)}}</view>
+              <view class="cell td narrow">{{etf.days_gt7}}</view>
+              <view class="cell td narrow">{{etf.score}}</view>
+              <view class="cell td rec-col">{{etf.recommendation}} {{fmt.recIcons(etf.stars)}}</view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 注释 -->
+      <view class="section-notes">
+        <text class="note">基准涨幅: {{fmt.formatPercent(section.avg_change)}}（{{section.index_name}}ETF均值）</text>
+        <block wx:if="{{section.futures_correction}}">
+          <text class="note">{{section.futures_correction.symbol}}期货修正: 净值{{section.futures_correction.stale_days}}天未更新，取最近{{section.futures_correction.correction_days}}天期货</text>
+          <text class="note">累计修正: {{fmt.formatPercent(section.futures_correction.cumulative)}}</text>
+        </block>
+      </view>
+    </view>
+  </block>
+
+  <!-- 公式说明 -->
+  <view class="card formula-notes">
+    <text class="note" wx:for="{{report.formula_notes}}" wx:key="*this">{{item}}</text>
+  </view>
+
+  <!-- 免责声明 -->
+  <view class="disclaimer">
+    <text>以上是大模型瞎分析，不要参考，不构成投资建议。</text>
+  </view>
+
+</view>

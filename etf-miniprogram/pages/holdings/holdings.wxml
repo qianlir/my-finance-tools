@@ -1,0 +1,78 @@
+<!--pages/holdings/holdings.wxml-->
+<wxs src="../../utils/format.wxs" module="fmt" />
+
+<view class="container">
+  <!-- 顶部操作栏 -->
+  <view class="top-bar">
+    <text class="title">持仓换仓</text>
+    <text class="settings-btn" bindtap="goToSettings">⚙️ 设置Cookie</text>
+  </view>
+
+  <!-- 未登录状态 -->
+  <view wx:if="{{!isLoggedIn}}" class="login-card">
+    <view class="login-icon">🔐</view>
+    <view class="login-title">未配置Cookie</view>
+    <view class="login-desc">请先到设置页面配置同花顺Cookie</view>
+    <button class="btn-settings" bindtap="goToSettings">去设置</button>
+  </view>
+
+  <!-- 已登录状态 -->
+  <view wx:else>
+    <view class="header">
+      <text class="count">我的持仓 ({{holdings.length}})</text>
+      <view class="header-actions">
+        <text class="refresh" bindtap="refresh">{{loading ? '刷新中...' : '刷新'}}</text>
+      </view>
+    </view>
+
+    <!-- 持仓列表 -->
+    <view wx:if="{{holdings.length > 0}}" class="holdings-list">
+      <view wx:for="{{holdings}}" wx:key="code" class="holding-card {{item.shouldSwap ? 'warning' : 'ok'}}">
+        <view class="holding-header">
+          <text class="code">{{item.code}}</text>
+          <text class="name">{{item.name}}</text>
+          <text class="status {{item.recommendation.includes('买入') ? 'buy' : 'hold'}}">{{item.recommendation}}</text>
+        </view>
+
+        <view class="holding-detail">
+          <text class="metric">持仓: {{item.shares}} 股</text>
+          <text class="metric">市值: ¥{{item.value}}</text>
+        </view>
+
+        <view class="holding-metrics">
+          <view class="metric-item">
+            <text class="label">溢价率</text>
+            <text class="value {{item.display_premium >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(item.display_premium)}}</text>
+          </view>
+          <view class="metric-item">
+            <text class="label">评分</text>
+            <text class="value">{{item.score}}</text>
+          </view>
+          <view class="metric-item">
+            <text class="label">综合超额</text>
+            <text class="value {{item.composite >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(item.composite)}}</text>
+          </view>
+        </view>
+
+        <!-- 换仓建议 -->
+        <view wx:if="{{item.shouldSwap}}" class="swap-suggestion">
+          <text class="swap-icon">⚠️</text>
+          <text class="swap-text">建议换仓到 {{item.bestCode}} {{item.bestName}}</text>
+          <text class="swap-reason">（超额差 {{item.excessDiff}}%）</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view wx:if="{{holdings.length === 0 && !loading}}" class="empty-state">
+      <text class="empty-icon">📊</text>
+      <text class="empty-text">暂无 ETF 持仓数据</text>
+      <text class="empty-hint">请确认同花顺账号中有 ETF 持仓</text>
+    </view>
+
+    <!-- 加载中 -->
+    <view wx:if="{{loading}}" class="loading">
+      <text>加载中...</text>
+    </view>
+  </view>
+</view>

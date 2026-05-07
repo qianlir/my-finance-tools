@@ -1,0 +1,85 @@
+<!--pages/index/index.wxml-->
+<wxs src="../../utils/format.wxs" module="fmt" />
+
+<view class="container">
+  <!-- 头部 -->
+  <view class="header">
+    <text class="title">ETF 投资助手</text>
+    <text class="subtitle" bindtap="onRefresh">最后更新: {{lastUpdate}} 🔄</text>
+  </view>
+
+  <!-- 实时溢价卡片 -->
+  <view class="card report-card" bindtap="goToReport">
+    <view class="card-header">
+      <text class="icon">📊</text>
+      <text class="card-title">实时溢价分析</text>
+      <text class="arrow">→</text>
+    </view>
+    <view class="card-body">
+      <view class="futures-row">
+        <text class="label">纳指期货</text>
+        <text class="value {{nqChange >= 0 ? 'red' : 'green'}}">{{nqPrice}} ({{fmt.formatPercent(nqChange)}})</text>
+      </view>
+      <view class="futures-row">
+        <text class="label">标普期货</text>
+        <text class="value {{esChange >= 0 ? 'red' : 'green'}}">{{esPrice}} ({{fmt.formatPercent(esChange)}})</text>
+      </view>
+    </view>
+    <view class="card-footer">
+      <text class="hint">查看各 ETF 溢价率与推荐</text>
+    </view>
+  </view>
+
+  <!-- 回测分析卡片 -->
+  <view class="card backtest-card" bindtap="goToBacktest">
+    <view class="card-header">
+      <text class="icon">📈</text>
+      <text class="card-title">策略回测</text>
+      <text class="arrow">→</text>
+    </view>
+    <view class="card-body">
+      <view class="strategy-row">
+        <text class="label">策略A (每日换仓)</text>
+        <text class="value {{strategyAReturn >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(strategyAReturn)}}</text>
+      </view>
+      <view class="strategy-row">
+        <text class="label">策略B (阈值>0.5)</text>
+        <text class="value {{strategyBReturn >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(strategyBReturn)}}</text>
+      </view>
+      <view class="drawdown-row">
+        <text class="label">最大回撤</text>
+        <text class="value green">{{fmt.formatPercent(maxDrawdown)}}</text>
+      </view>
+    </view>
+    <view class="card-footer">
+      <text class="hint">查看历史回测结果与收益对比</text>
+    </view>
+  </view>
+
+  <!-- 持仓换仓卡片 -->
+  <view class="card holdings-card" bindtap="goToHoldings">
+    <view class="card-header">
+      <text class="icon">💼</text>
+      <text class="card-title">持仓换仓</text>
+      <text class="arrow">→</text>
+    </view>
+    <view class="card-body">
+      <view wx:if="{{hasHoldings}}" class="holdings-status">
+        <text class="status-ok">已获取持仓</text>
+        <text class="count">共 {{holdingsCount}} 只基金</text>
+      </view>
+      <view wx:else class="holdings-status">
+        <text class="status-pending">点击获取持仓</text>
+        <text class="hint">同花顺账号登录</text>
+      </view>
+    </view>
+    <view class="card-footer">
+      <text class="hint">{{hasHoldings ? '查看换仓建议' : '绑定后获取个性化建议'}}</text>
+    </view>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="footer-hint">
+    <text>以上内容仅供参考，不构成投资建议</text>
+  </view>
+</view>

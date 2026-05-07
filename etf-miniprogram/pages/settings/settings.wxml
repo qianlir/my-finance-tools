@@ -1,0 +1,52 @@
+<!--pages/settings/settings.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">同花顺Cookie配置</text>
+  </view>
+
+  <view class="card">
+    <view class="section-title">📋 获取Cookie步骤</view>
+    <view class="steps">
+      <view class="step">1. 用浏览器打开 tzzb.10jqka.com.cn 并登录</view>
+      <view class="step">2. 按 F12 打开开发者工具</view>
+      <view class="step">3. 切换到 Network/网络 标签</view>
+      <view class="step">4. 刷新页面，找到 stock_position 请求</view>
+      <view class="step">5. 复制请求头中的 Cookie 值（很长的一段）</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">📝 粘贴Cookie</view>
+    <textarea
+      class="cookie-input"
+      placeholder="粘贴完整的Cookie值..."
+      value="{{cookieValue}}"
+      bindinput="onCookieInput"
+      maxlength="5000"
+      auto-height
+    />
+    <view class="status-row">
+      <text class="status {{hasCookie ? 'ok' : 'pending'}}">
+        {{hasCookie ? '✅ 已配置' : '⚠️ 未配置'}}
+      </text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">🔧 操作</view>
+    <view class="buttons">
+      <button class="btn-primary" bindtap="onSave">保存Cookie</button>
+      <button class="btn-secondary" bindtap="onTest">测试连接</button>
+      <button class="btn-danger" bindtap="onClear">清除</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">💡 提示</view>
+    <view class="hints">
+      <text class="hint">• Cookie会过期，失效后重新获取并粘贴即可</text>
+      <text class="hint">• 保存后可在"持仓"页面查看你的基金</text>
+      <text class="hint">• 数据仅存储在本地，不会上传到服务器</text>
+    </view>
+  </view>
+</view>

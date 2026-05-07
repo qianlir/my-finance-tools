@@ -1,0 +1,59 @@
+// WXS 格式化模块 — 在 WXML 模板中使用
+var formatPercent = function(value) {
+  if (value === null || value === undefined) return 'N/A'
+  var sign = value > 0 ? '+' : ''
+  return sign + value.toFixed(2) + '%'
+}
+
+var formatPrice = function(value) {
+  if (value === null || value === undefined) return 'N/A'
+  return value.toFixed(3)
+}
+
+var formatInt = function(value) {
+  if (value === null || value === undefined) return 'N/A'
+  return '' + Math.round(value)
+}
+
+// 中国市场：红涨绿跌
+var colorClass = function(value) {
+  if (value > 0) return 'red'
+  if (value < 0) return 'green'
+  return 'neutral'
+}
+
+// 推荐等级样式
+var recClass = function(stars) {
+  if (stars >= 4) return 'rec-top'
+  if (stars >= 2) return 'rec-good'
+  if (stars >= 0) return 'rec-neutral'
+  return 'rec-sell'
+}
+
+// 生成推荐图标
+var recIcons = function(stars) {
+  var result = ''
+  var count = stars > 0 ? stars : -stars
+  var icon = stars > 0 ? '\u2705' : '\u274C'
+  for (var i = 0; i < count; i++) {
+    result += icon
+  }
+  return result
+}
+
+// 超额(均值) 组合显示
+var excessWithAvg = function(excess, avg) {
+  var e = formatPercent(excess)
+  var a = formatPercent(avg)
+  return e + '(' + a + ')'
+}
+
+module.exports = {
+  formatPercent: formatPercent,
+  formatPrice: formatPrice,
+  formatInt: formatInt,
+  colorClass: colorClass,
+  recClass: recClass,
+  recIcons: recIcons,
+  excessWithAvg: excessWithAvg
+}
