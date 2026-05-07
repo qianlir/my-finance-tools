@@ -6,7 +6,7 @@
     "name": "Luke"
   },
   "components": {
-    "nasdaq-etf-advisor": "1.0.0",
+    "etf-advisor": "1.0.0",
     "etf-evaluator": "1.0.0"
   }
 }

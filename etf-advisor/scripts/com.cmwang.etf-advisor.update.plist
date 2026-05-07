@@ -8,15 +8,15 @@
     <array>
         <string>/bin/zsh</string>
         <string>-c</string>
-        <string>source /Users/cmwang/.zshrc &amp;&amp; /Users/cmwang/work/money/nasdaq-etf-advisor/scripts/local_scheduled_update.sh</string>
+        <string>source /Users/cmwang/.zshrc &amp;&amp; /Users/cmwang/work/money/etf-advisor/scripts/local_scheduled_update.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <integer>600</integer>
     <key>RunAtLoad</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>/Users/cmwang/work/money/nasdaq-etf-advisor/data/scheduled.out.log</string>
+    <string>/Users/cmwang/work/money/etf-advisor/data/scheduled.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/cmwang/work/money/nasdaq-etf-advisor/data/scheduled.err.log</string>
+    <string>/Users/cmwang/work/money/etf-advisor/data/scheduled.err.log</string>
 </dict>
 </plist>

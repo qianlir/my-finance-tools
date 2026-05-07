@@ -17,20 +17,20 @@ triggers:
 
 ## 目的
 
-读取 `nasdaq-etf-advisor/scripts/recommend_by_change.py` 生成的每日分析报告，
+读取 `etf-advisor/scripts/recommend_by_change.py` 生成的每日分析报告，
 结合前一天报告数据，生成专业的投资评估摘要。评估关注溢价趋势、推荐变化和风险因素，
 为用户提供超越固定模板的市场洞察。
 
 ## 触发条件
 
 - 用户说"评估ETF报告"、"LLM评估"、"生成评估"、"etf evaluation"
-- nasdaq-etf-advisor 完成数据分析后，用户要求生成深度评估
+- etf-advisor 完成数据分析后，用户要求生成深度评估
 
 ## 工作流程
 
 ### 1. 定位报告
 
-使用 Glob 查找 `nasdaq-etf-advisor/reports/analysis_*.md`，取修改时间最新的文件作为当日报告。
+使用 Glob 查找 `etf-advisor/reports/analysis_*.md`，取修改时间最新的文件作为当日报告。
 
 ### 2. 定位前日报告
 

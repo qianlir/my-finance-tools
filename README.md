@@ -36,7 +36,7 @@ python3 scripts/recommend_by_change.py --holding 513100 159655
 ## 项目结构
 
 ```
-nasdaq-etf-advisor/
+etf-advisor/
 ├── scripts/
 │   ├── update_data.py            # 数据采集脚本
 │   └── recommend_by_change.py    # 推荐分析脚本
