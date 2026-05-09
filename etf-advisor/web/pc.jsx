@@ -42,6 +42,7 @@ function PCNav({ tab, setTab }) {
    ══════════════════════════════════════════ */
 function PCOverview({ setTab, setIdx }) {
   if (!REPORT.sections.length) return null;
+  const [selFund, setSelFund] = useS(null);
   const topPicks = REPORT.sections.map(s => ({ section: s, etf: s.etfs[0] }));
 
   return (
@@ -109,9 +110,9 @@ function PCOverview({ setTab, setIdx }) {
                   <tr key={e.code} style={{ background: rowBg }}
                     onMouseEnter={ev => ev.currentTarget.style.background = 'var(--ink-05)'}
                     onMouseLeave={ev => ev.currentTarget.style.background = rowBg}>
-                    <td style={TDL}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 13, fontWeight: 500 }}>{e.name}</span>
+                    <td style={TDL} onClick={() => { const s = REPORT.sections.find(s => s.index_name === e.indexName); if (s) { setIdx(s.index_type); setTab('premium'); }}}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 13, fontWeight: 500, borderBottom: '1px dashed var(--ink-20)' }}>{e.name}</span>
                         <PoolBadge pool={e.rotation_pool} />
                       </div>
                       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)' }}>{e.code}</div>
@@ -139,7 +140,93 @@ function PCOverview({ setTab, setIdx }) {
    ══════════════════════════════════════════ */
 function PCPremium({ activeIdx, setActiveIdx }) {
   if (!REPORT.sections.length) return null;
+  const [selFund, setSelFund] = useS(null);
   const section = REPORT.sections.find(s => s.index_type === activeIdx) || REPORT.sections[0];
+
+  // 基金详情页（全页面）
+  if (selFund) {
+    const fc = section.futures_correction;
+    const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
+    const estNav = selFund.nav * r;
+    const holdings = selFund.holdings || [];
+    const metrics = [
+      ['净值', selFund.nav.toFixed(3), null],
+      ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
+      ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
+      ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
+      ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)],
+      ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)],
+      ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)],
+      ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)],
+      ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)],
+      ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)],
+      ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
+      ['分值', selFund.score.toFixed(2), null],
+    ];
+    return (
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 64px' }}>
+        <div style={{ marginBottom: 20 }}>
+          <a href="#" onClick={e => { e.preventDefault(); setSelFund(null); }} style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', textDecoration: 'none' }}>← 返回溢价分析</a>
+        </div>
+        <div style={{ display: 'flex', gap: 40 }}>
+          {/* 左栏：基本信息 + 指标 */}
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 24, fontWeight: 700 }}>{selFund.name}</span>
+                  <PoolBadge pool={selFund.rotation_pool} />
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{selFund.code} · {section.index_name}</div>
+              </div>
+              <RecIndicator rec={selFund.recommendation} stars={selFund.stars} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 24 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 36, fontWeight: 500 }}>{selFund.price.toFixed(3)}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: chg(selFund.change) }}>{fmtPct(selFund.change)}</span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                {metrics.map(([l, v, c]) => (
+                  <tr key={l}>
+                    <td style={{ padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', width: '40%' }}>{l}</td>
+                    <td style={{ padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-mono)', fontSize: 13, color: c || 'var(--ink)', textAlign: 'right' }}>{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* 右栏：持仓 */}
+          {holdings.length > 0 && (
+            <div style={{ width: 340 }}>
+              <Label>持仓明细 ({holdings.length})</Label>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={{ ...TH, textAlign: 'left' }}>代码</th>
+                  <th style={TH}>权重</th>
+                  <th style={TH}>价格</th>
+                  <th style={TH}>涨跌</th>
+                </tr></thead>
+                <tbody>
+                  {holdings.map(h => (
+                    <tr key={h.ticker}>
+                      <td style={TDL}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>{h.ticker}</div>
+                        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)' }}>{h.name}</div>
+                      </td>
+                      <td style={{ ...TDM, fontSize: 12 }}>{h.weight?.toFixed(1)}%</td>
+                      <td style={{ ...TDM, fontSize: 12 }}>{h.price?.toFixed(2) || '—'}</td>
+                      <td style={{ ...TDM, fontSize: 12, color: chg(h.change_pct) }}>{h.change_pct != null ? fmtPct(h.change_pct) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   const etfs = section.etfs;
   const fc = section.futures_correction;
   const top = etfs[0];
@@ -219,9 +306,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
                 <tr key={e.code} style={{ background: rowBg }}
                   onMouseEnter={ev => ev.currentTarget.style.background = 'var(--ink-05)'}
                   onMouseLeave={ev => ev.currentTarget.style.background = rowBg}>
-                  <td style={TDL}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 12, fontWeight: 500 }}>{e.name}</span>
+                  <td style={TDL} onClick={() => setSelFund(e)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 12, fontWeight: 500, borderBottom: '1px dashed var(--ink-20)' }}>{e.name}</span>
                       <PoolBadge pool={e.rotation_pool} />
                     </div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' }}>{e.code}</div>
@@ -258,7 +345,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       </div>
 
       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 16, lineHeight: 1.6 }}>
-        分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%
+        分值综合考虑当前溢价与历史均值的偏离、实时溢价高低和近一年净值涨幅。溢价越低于历史均值、净值涨幅越大的ETF，分值越高，越值得关注。
       </div>
     </div>
   );

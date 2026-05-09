@@ -426,6 +426,202 @@ function RefreshBtn({
     d: "M21 12a9 9 0 0 1-15 6.7L3 16"
   }));
 }
+
+// Fund detail modal
+function FundDetailModal({
+  etf,
+  section,
+  onClose
+}) {
+  if (!etf) return null;
+  const fc = section?.futures_correction;
+  const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
+  const estNav = etf.nav * r;
+  const holdings = etf.holdings || [];
+  const rows = [['价格', etf.price.toFixed(3), null], ['净值', etf.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(etf.change), chg(etf.change)], ['估算溢价', fmtPct(etf.display_premium), chg(etf.display_premium)], ['3M超额(均值)', fmtPct(etf.excess_3m) + ' (' + fmtPct(etf.avg_3m) + ')', chg(etf.excess_3m)], ['6M超额(均值)', fmtPct(etf.excess_6m) + ' (' + fmtPct(etf.avg_6m) + ')', chg(etf.excess_6m)], ['1Y超额(均值)', fmtPct(etf.excess_1y) + ' (' + fmtPct(etf.avg_1y) + ')', chg(etf.excess_1y)], ['综合超额', fmtPct(etf.composite), chg(etf.composite)], ['年净值涨幅', fmtPct(etf.nav_return_1y), chg(etf.nav_return_1y)], ['年价格涨幅', fmtPct(etf.price_return_1y), chg(etf.price_return_1y)], ['>7%天数', String(etf.days_gt7), etf.days_gt7 > 30 ? '#A8342A' : null], ['分值', etf.score.toFixed(2), null]];
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.4)',
+      zIndex: 200,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: 'var(--paper)',
+      borderRadius: 8,
+      padding: '20px 24px',
+      width: 420,
+      maxWidth: '100%',
+      maxHeight: '85vh',
+      overflowY: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-display-cjk)',
+      fontSize: 18,
+      fontWeight: 700
+    }
+  }, etf.name), /*#__PURE__*/React.createElement(PoolBadge, {
+    pool: etf.rotation_pool
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: 'var(--fg-muted)'
+    }
+  }, etf.code, " \xB7 ", section?.index_name)), /*#__PURE__*/React.createElement(RecIndicator, {
+    rec: etf.recommendation,
+    stars: etf.stars
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: 10,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 28,
+      fontWeight: 500
+    }
+  }, etf.price.toFixed(3)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 14,
+      color: chg(etf.change)
+    }
+  }, fmtPct(etf.change))), rows.map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+    key: l,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '5px 0',
+      borderBottom: '1px solid var(--ink-10)'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-ui)',
+      fontSize: 12,
+      color: 'var(--fg-3)'
+    }
+  }, l), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-mono)',
+      fontSize: 12,
+      color: c || 'var(--ink)'
+    }
+  }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--font-ui)',
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--fg-3)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.06em',
+      marginBottom: 6
+    }
+  }, "\u6301\u4ED3\u660E\u7EC6"), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse'
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    style: {
+      ...TH,
+      textAlign: 'left',
+      fontSize: 9
+    }
+  }, "\u4EE3\u7801"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      ...TH,
+      fontSize: 9
+    }
+  }, "\u6743\u91CD"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      ...TH,
+      fontSize: 9
+    }
+  }, "\u4EF7\u683C"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      ...TH,
+      fontSize: 9
+    }
+  }, "\u6DA8\u8DCC"))), /*#__PURE__*/React.createElement("tbody", null, holdings.map(h => /*#__PURE__*/React.createElement("tr", {
+    key: h.ticker
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      ...TDL,
+      fontSize: 11
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 500
+    }
+  }, h.ticker), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--fg-muted)'
+    }
+  }, h.name)), /*#__PURE__*/React.createElement("td", {
+    style: {
+      ...TDM,
+      fontSize: 11
+    }
+  }, h.weight?.toFixed(1), "%"), /*#__PURE__*/React.createElement("td", {
+    style: {
+      ...TDM,
+      fontSize: 11
+    }
+  }, h.price?.toFixed(2) || '—'), /*#__PURE__*/React.createElement("td", {
+    style: {
+      ...TDM,
+      fontSize: 11,
+      color: chg(h.change_pct)
+    }
+  }, h.change_pct != null ? fmtPct(h.change_pct) : '—')))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    onClick: onClose,
+    style: {
+      fontFamily: 'var(--font-ui)',
+      fontSize: 12,
+      color: 'var(--fg-muted)',
+      cursor: 'pointer'
+    }
+  }, "\u5173\u95ED"))));
+}
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;
@@ -436,6 +632,7 @@ window.Label = Label;
 window.FuturesTicker = FuturesTicker;
 window.RefreshBtn = RefreshBtn;
 window.PoolBadge = PoolBadge;
+window.FundDetailModal = FundDetailModal;
 window.TH = TH;
 window.TD = TD;
 window.TDL = TDL;
@@ -544,6 +741,7 @@ function PCOverview({
   setIdx
 }) {
   if (!REPORT.sections.length) return null;
+  const [selFund, setSelFund] = useS(null);
   const topPicks = REPORT.sections.map(s => ({
     section: s,
     etf: s.etfs[0]
@@ -738,18 +936,27 @@ function PCOverview({
         onMouseEnter: ev => ev.currentTarget.style.background = 'var(--ink-05)',
         onMouseLeave: ev => ev.currentTarget.style.background = rowBg
       }, /*#__PURE__*/React.createElement("td", {
-        style: TDL
+        style: TDL,
+        onClick: () => {
+          const s = REPORT.sections.find(s => s.index_name === e.indexName);
+          if (s) {
+            setIdx(s.index_type);
+            setTab('premium');
+          }
+        }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           alignItems: 'center',
-          gap: 4
+          gap: 4,
+          cursor: 'pointer'
         }
       }, /*#__PURE__*/React.createElement("span", {
         style: {
           fontFamily: 'var(--font-display-cjk)',
           fontSize: 13,
-          fontWeight: 500
+          fontWeight: 500,
+          borderBottom: '1px dashed var(--ink-20)'
         }
       }, e.name), /*#__PURE__*/React.createElement(PoolBadge, {
         pool: e.rotation_pool
@@ -811,7 +1018,177 @@ function PCPremium({
   setActiveIdx
 }) {
   if (!REPORT.sections.length) return null;
+  const [selFund, setSelFund] = useS(null);
   const section = REPORT.sections.find(s => s.index_type === activeIdx) || REPORT.sections[0];
+
+  // 基金详情页（全页面）
+  if (selFund) {
+    const fc = section.futures_correction;
+    const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
+    const estNav = selFund.nav * r;
+    const holdings = selFund.holdings || [];
+    const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '32px 32px 64px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 20
+      }
+    }, /*#__PURE__*/React.createElement("a", {
+      href: "#",
+      onClick: e => {
+        e.preventDefault();
+        setSelFund(null);
+      },
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 13,
+        color: 'var(--fg-3)',
+        textDecoration: 'none'
+      }
+    }, "\u2190 \u8FD4\u56DE\u6EA2\u4EF7\u5206\u6790")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 40
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 300
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 20
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-display-cjk)',
+        fontSize: 24,
+        fontWeight: 700
+      }
+    }, selFund.name), /*#__PURE__*/React.createElement(PoolBadge, {
+      pool: selFund.rotation_pool
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        color: 'var(--fg-muted)',
+        marginTop: 4
+      }
+    }, selFund.code, " \xB7 ", section.index_name)), /*#__PURE__*/React.createElement(RecIndicator, {
+      rec: selFund.recommendation,
+      stars: selFund.stars
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 12,
+        marginBottom: 24
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 36,
+        fontWeight: 500
+      }
+    }, selFund.price.toFixed(3)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 16,
+        color: chg(selFund.change)
+      }
+    }, fmtPct(selFund.change))), /*#__PURE__*/React.createElement("table", {
+      style: {
+        width: '100%',
+        borderCollapse: 'collapse'
+      }
+    }, /*#__PURE__*/React.createElement("tbody", null, metrics.map(([l, v, c]) => /*#__PURE__*/React.createElement("tr", {
+      key: l
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 0',
+        borderBottom: '1px solid var(--ink-10)',
+        fontFamily: 'var(--font-ui)',
+        fontSize: 13,
+        color: 'var(--fg-3)',
+        width: '40%'
+      }
+    }, l), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 0',
+        borderBottom: '1px solid var(--ink-10)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 13,
+        color: c || 'var(--ink)',
+        textAlign: 'right'
+      }
+    }, v)))))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 340
+      }
+    }, /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6 (", holdings.length, ")"), /*#__PURE__*/React.createElement("table", {
+      style: {
+        width: '100%',
+        borderCollapse: 'collapse'
+      }
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+      style: {
+        ...TH,
+        textAlign: 'left'
+      }
+    }, "\u4EE3\u7801"), /*#__PURE__*/React.createElement("th", {
+      style: TH
+    }, "\u6743\u91CD"), /*#__PURE__*/React.createElement("th", {
+      style: TH
+    }, "\u4EF7\u683C"), /*#__PURE__*/React.createElement("th", {
+      style: TH
+    }, "\u6DA8\u8DCC"))), /*#__PURE__*/React.createElement("tbody", null, holdings.map(h => /*#__PURE__*/React.createElement("tr", {
+      key: h.ticker
+    }, /*#__PURE__*/React.createElement("td", {
+      style: TDL
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        fontWeight: 500
+      }
+    }, h.ticker), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        color: 'var(--fg-muted)'
+      }
+    }, h.name)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        ...TDM,
+        fontSize: 12
+      }
+    }, h.weight?.toFixed(1), "%"), /*#__PURE__*/React.createElement("td", {
+      style: {
+        ...TDM,
+        fontSize: 12
+      }
+    }, h.price?.toFixed(2) || '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        ...TDM,
+        fontSize: 12,
+        color: chg(h.change_pct)
+      }
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))))));
+  }
   const etfs = section.etfs;
   const fc = section.futures_correction;
   const top = etfs[0];
@@ -975,18 +1352,21 @@ function PCPremium({
       onMouseEnter: ev => ev.currentTarget.style.background = 'var(--ink-05)',
       onMouseLeave: ev => ev.currentTarget.style.background = rowBg
     }, /*#__PURE__*/React.createElement("td", {
-      style: TDL
+      style: TDL,
+      onClick: () => setSelFund(e)
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
-        gap: 4
+        gap: 4,
+        cursor: 'pointer'
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: 'var(--font-display-cjk)',
         fontSize: 12,
-        fontWeight: 500
+        fontWeight: 500,
+        borderBottom: '1px dashed var(--ink-20)'
       }
     }, e.name), /*#__PURE__*/React.createElement(PoolBadge, {
       pool: e.rotation_pool
@@ -1098,7 +1478,7 @@ function PCPremium({
       marginTop: 16,
       lineHeight: 1.6
     }
-  }, "\u5206\u503C = 1Y\u51C0\u503C\u6DA8\u5E45\xD710% + (-\u7EFC\u5408\u8D85\u989D)\xD775% + (-\u4F30\u7B97\u6EA2\u4EF7)\xD715%"));
+  }, "\u5206\u503C\u7EFC\u5408\u8003\u8651\u5F53\u524D\u6EA2\u4EF7\u4E0E\u5386\u53F2\u5747\u503C\u7684\u504F\u79BB\u3001\u5B9E\u65F6\u6EA2\u4EF7\u9AD8\u4F4E\u548C\u8FD1\u4E00\u5E74\u51C0\u503C\u6DA8\u5E45\u3002\u6EA2\u4EF7\u8D8A\u4F4E\u4E8E\u5386\u53F2\u5747\u503C\u3001\u51C0\u503C\u6DA8\u5E45\u8D8A\u5927\u7684ETF\uFF0C\u5206\u503C\u8D8A\u9AD8\uFF0C\u8D8A\u503C\u5F97\u5173\u6CE8\u3002"));
 }
 window.PCNav = PCNav;
 window.PCOverview = PCOverview;
@@ -1393,6 +1773,145 @@ function MobPremium({
   const etfs = section.etfs;
   const fc = section.futures_correction;
   const [expanded, setExpanded] = useSM(null);
+  const [selFund, setSelFund] = useSM(null);
+
+  // 基金详情页（全屏）
+  if (selFund) {
+    const fc = section.futures_correction;
+    const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
+    const estNav = selFund.nav * r;
+    const holdings = selFund.holdings || [];
+    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '12px 16px 68px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 0 12px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      onClick: () => setSelFund(null),
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 13,
+        color: 'var(--fg-3)',
+        cursor: 'pointer'
+      }
+    }, "\u2190 \u8FD4\u56DE")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-display-cjk)',
+        fontSize: 18,
+        fontWeight: 700
+      }
+    }, selFund.name), /*#__PURE__*/React.createElement(PoolBadge, {
+      pool: selFund.rotation_pool
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 11,
+        color: 'var(--fg-muted)',
+        marginTop: 2
+      }
+    }, selFund.code, " \xB7 ", section.index_name)), /*#__PURE__*/React.createElement(RecIndicator, {
+      rec: selFund.recommendation,
+      stars: selFund.stars
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 10,
+        margin: '12px 0 16px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 28,
+        fontWeight: 500
+      }
+    }, selFund.price.toFixed(3)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 14,
+        color: chg(selFund.change)
+      }
+    }, fmtPct(selFund.change))), rows.map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+      key: l,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        padding: '6px 0',
+        borderBottom: '1px solid var(--ink-10)'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 12,
+        color: 'var(--fg-3)'
+      }
+    }, l), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        color: c || 'var(--ink)'
+      }
+    }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 16
+      }
+    }, /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6"), holdings.map(h => /*#__PURE__*/React.createElement("div", {
+      key: h.ticker,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 0',
+        borderBottom: '1px solid var(--ink-10)'
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        fontWeight: 500
+      }
+    }, h.ticker), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        color: 'var(--fg-muted)'
+      }
+    }, h.name)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'right'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12
+      }
+    }, h.weight?.toFixed(1), "%"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: chg(h.change_pct)
+      }
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px 68px'
@@ -1493,10 +2012,16 @@ function MobPremium({
         gap: 6
       }
     }, /*#__PURE__*/React.createElement("span", {
+      onClick: ev => {
+        ev.stopPropagation();
+        setSelFund(e);
+      },
       style: {
         fontFamily: 'var(--font-display-cjk)',
         fontSize: 14,
-        fontWeight: 500
+        fontWeight: 500,
+        borderBottom: '1px dashed var(--ink-20)',
+        cursor: 'pointer'
       }
     }, e.name), /*#__PURE__*/React.createElement(PoolBadge, {
       pool: e.rotation_pool
@@ -1619,7 +2144,7 @@ function MobPremium({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "\u70B9\u51FB\u5C55\u5F00\u8BE6\u60C5"));
+  }, "\u70B9\u51FB\u5C55\u5F00\u8BE6\u60C5 \xB7 \u70B9\u51FB\u540D\u79F0\u67E5\u770B\u5B8C\u6574\u4FE1\u606F"));
 }
 window.MobTabs = MobTabs;
 window.MobOverview = MobOverview;

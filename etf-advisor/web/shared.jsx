@@ -187,6 +187,89 @@ function RefreshBtn({ compact }) {
   );
 }
 
+// Fund detail modal
+function FundDetailModal({ etf, section, onClose }) {
+  if (!etf) return null;
+  const fc = section?.futures_correction;
+  const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
+  const estNav = etf.nav * r;
+  const holdings = etf.holdings || [];
+  const rows = [
+    ['价格', etf.price.toFixed(3), null],
+    ['净值', etf.nav.toFixed(3), null],
+    ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
+    ['涨幅', fmtPct(etf.change), chg(etf.change)],
+    ['估算溢价', fmtPct(etf.display_premium), chg(etf.display_premium)],
+    ['3M超额(均值)', fmtPct(etf.excess_3m) + ' (' + fmtPct(etf.avg_3m) + ')', chg(etf.excess_3m)],
+    ['6M超额(均值)', fmtPct(etf.excess_6m) + ' (' + fmtPct(etf.avg_6m) + ')', chg(etf.excess_6m)],
+    ['1Y超额(均值)', fmtPct(etf.excess_1y) + ' (' + fmtPct(etf.avg_1y) + ')', chg(etf.excess_1y)],
+    ['综合超额', fmtPct(etf.composite), chg(etf.composite)],
+    ['年净值涨幅', fmtPct(etf.nav_return_1y), chg(etf.nav_return_1y)],
+    ['年价格涨幅', fmtPct(etf.price_return_1y), chg(etf.price_return_1y)],
+    ['>7%天数', String(etf.days_gt7), etf.days_gt7 > 30 ? '#A8342A' : null],
+    ['分值', etf.score.toFixed(2), null],
+  ];
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--paper)', borderRadius: 8, padding: '20px 24px', width: 420, maxWidth: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 18, fontWeight: 700 }}>{etf.name}</span>
+              <PoolBadge pool={etf.rotation_pool} />
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{etf.code} · {section?.index_name}</span>
+          </div>
+          <RecIndicator rec={etf.recommendation} stars={etf.stars} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500 }}>{etf.price.toFixed(3)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: chg(etf.change) }}>{fmtPct(etf.change)}</span>
+        </div>
+
+        {rows.map(([l, v, c]) => (
+          <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--ink-10)' }}>
+            <span style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: 'var(--fg-3)' }}>{l}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: c || 'var(--ink)' }}>{v}</span>
+          </div>
+        ))}
+
+        {holdings.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontFamily: 'var(--font-ui)', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>持仓明细</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={{ ...TH, textAlign: 'left', fontSize: 9 }}>代码</th>
+                <th style={{ ...TH, fontSize: 9 }}>权重</th>
+                <th style={{ ...TH, fontSize: 9 }}>价格</th>
+                <th style={{ ...TH, fontSize: 9 }}>涨跌</th>
+              </tr></thead>
+              <tbody>
+                {holdings.map(h => (
+                  <tr key={h.ticker}>
+                    <td style={{ ...TDL, fontSize: 11 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{h.ticker}</div>
+                      <div style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{h.name}</div>
+                    </td>
+                    <td style={{ ...TDM, fontSize: 11 }}>{h.weight?.toFixed(1)}%</td>
+                    <td style={{ ...TDM, fontSize: 11 }}>{h.price?.toFixed(2) || '—'}</td>
+                    <td style={{ ...TDM, fontSize: 11, color: chg(h.change_pct) }}>{h.change_pct != null ? fmtPct(h.change_pct) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <span onClick={onClose} style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: 'var(--fg-muted)', cursor: 'pointer' }}>关闭</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;
@@ -197,4 +280,5 @@ window.Label = Label;
 window.FuturesTicker = FuturesTicker;
 window.RefreshBtn = RefreshBtn;
 window.PoolBadge = PoolBadge;
+window.FundDetailModal = FundDetailModal;
 window.TH = TH; window.TD = TD; window.TDL = TDL; window.TDM = TDM;

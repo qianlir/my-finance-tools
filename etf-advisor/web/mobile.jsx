@@ -100,6 +100,72 @@ function MobPremium({ activeIdx, setActiveIdx }) {
   const etfs = section.etfs;
   const fc = section.futures_correction;
   const [expanded, setExpanded] = useSM(null);
+  const [selFund, setSelFund] = useSM(null);
+
+  // 基金详情页（全屏）
+  if (selFund) {
+    const fc = section.futures_correction;
+    const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
+    const estNav = selFund.nav * r;
+    const holdings = selFund.holdings || [];
+    const rows = [
+      ['净值', selFund.nav.toFixed(3), null],
+      ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
+      ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
+      ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
+      ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)],
+      ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)],
+      ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)],
+      ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)],
+      ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)],
+      ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
+      ['分值', selFund.score.toFixed(2), null],
+    ];
+    return (
+      <div style={{ padding: '12px 16px 68px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 12px' }}>
+          <span onClick={() => setSelFund(null)} style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', cursor: 'pointer' }}>← 返回</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 18, fontWeight: 700 }}>{selFund.name}</span>
+              <PoolBadge pool={selFund.rotation_pool} />
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{selFund.code} · {section.index_name}</div>
+          </div>
+          <RecIndicator rec={selFund.recommendation} stars={selFund.stars} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '12px 0 16px' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500 }}>{selFund.price.toFixed(3)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: chg(selFund.change) }}>{fmtPct(selFund.change)}</span>
+        </div>
+        {rows.map(([l, v, c]) => (
+          <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--ink-10)' }}>
+            <span style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: 'var(--fg-3)' }}>{l}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: c || 'var(--ink)' }}>{v}</span>
+          </div>
+        ))}
+        {holdings.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Label>持仓明细</Label>
+            {holdings.map(h => (
+              <div key={h.ticker} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--ink-10)' }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>{h.ticker}</div>
+                  <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)' }}>{h.name}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{h.weight?.toFixed(1)}%</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: chg(h.change_pct) }}>{h.change_pct != null ? fmtPct(h.change_pct) : '—'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '12px 16px 68px' }}>
@@ -149,7 +215,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 14, fontWeight: 500 }}>{e.name}</span>
+                  <span onClick={ev => { ev.stopPropagation(); setSelFund(e); }} style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 14, fontWeight: 500, borderBottom: '1px dashed var(--ink-20)', cursor: 'pointer' }}>{e.name}</span>
                   <PoolBadge pool={e.rotation_pool} />
                   <RecCompact rec={e.recommendation} stars={e.stars} />
                 </div>
@@ -203,7 +269,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
       })}
       <div style={{ borderTop: '1px solid var(--ink-10)' }}></div>
       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 12, lineHeight: 1.5 }}>
-        点击展开详情
+        点击展开详情 · 点击名称查看完整信息
       </div>
     </div>
   );
