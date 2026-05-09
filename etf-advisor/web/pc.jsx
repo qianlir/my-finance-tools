@@ -43,7 +43,10 @@ function PCNav({ tab, setTab }) {
 function PCOverview({ setTab, setIdx }) {
   if (!REPORT.sections.length) return null;
   const [selFund, setSelFund] = useS(null);
-  const topPicks = REPORT.sections.map(s => ({ section: s, etf: s.etfs[0] }));
+  const alwaysShow = ['NASDAQ', 'SP500'];
+  const topPicks = REPORT.sections
+    .map(s => ({ section: s, etf: s.etfs[0] }))
+    .filter(({ section: s, etf: e }) => alwaysShow.includes(s.index_type) || (e && e.stars >= 3));
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 64px' }}>

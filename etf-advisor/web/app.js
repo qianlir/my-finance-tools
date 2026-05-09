@@ -742,10 +742,14 @@ function PCOverview({
 }) {
   if (!REPORT.sections.length) return null;
   const [selFund, setSelFund] = useS(null);
+  const alwaysShow = ['NASDAQ', 'SP500'];
   const topPicks = REPORT.sections.map(s => ({
     section: s,
     etf: s.etfs[0]
-  }));
+  })).filter(({
+    section: s,
+    etf: e
+  }) => alwaysShow.includes(s.index_type) || e && e.stars >= 3);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 1200,
@@ -1563,10 +1567,14 @@ function MobOverview({
   setIdx
 }) {
   if (!REPORT.sections.length) return null;
+  const alwaysShow = ['NASDAQ', 'SP500'];
   const topPicks = REPORT.sections.map(s => ({
     s,
     e: s.etfs[0]
-  }));
+  })).filter(({
+    s,
+    e
+  }) => alwaysShow.includes(s.index_type) || e && e.stars >= 3);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px 68px'

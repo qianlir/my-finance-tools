@@ -84,6 +84,12 @@ INDEX_CONFIG = {
         'name_cn': '其他',
         'nav_label': '美股收盘',
         'use_holdings': True,
+    },
+    'LOF': {
+        'symbol': '',
+        'name_cn': 'LOF',
+        'nav_label': '美股收盘',
+        'use_holdings': True,
     }
 }
 
@@ -115,12 +121,26 @@ ETF_CONFIG = [
     {'code': '513000', 'name': '日经225ETF易方达', 'index': 'NIKKEI'},
     {'code': '513520', 'name': '日经ETF华夏', 'index': 'NIKKEI'},
     {'code': '513880', 'name': '日经225ETF华安', 'index': 'NIKKEI'},
-    # 其他
+    # 其他 ETF
     {'code': '513400', 'name': '国泰道琼斯ETF', 'index': 'OTHERS'},
     {'code': '159509', 'name': '纳指科技ETF', 'index': 'OTHERS'},
     {'code': '159529', 'name': '标普消费ETF', 'index': 'OTHERS'},
-    {'code': '501312', 'name': '海外科技LOF', 'index': 'OTHERS'},
-    {'code': '162415', 'name': '美国消费LOF', 'index': 'OTHERS'},
+    {'code': '513290', 'name': '美国生物ETF', 'index': 'OTHERS'},
+    {'code': '513080', 'name': '法国CAC40ETF', 'index': 'OTHERS'},
+    # LOF
+    {'code': '501312', 'name': '海外科技LOF', 'index': 'LOF'},
+    {'code': '162415', 'name': '美国消费LOF', 'index': 'LOF'},
+    {'code': '161128', 'name': '标普科技LOF', 'index': 'LOF'},
+    {'code': '160140', 'name': '美国REIT LOF', 'index': 'LOF'},
+    {'code': '161126', 'name': '标普医药LOF', 'index': 'LOF'},
+    {'code': '161127', 'name': '标普生物LOF', 'index': 'LOF'},
+    {'code': '162411', 'name': '华宝油气LOF', 'index': 'LOF'},
+    {'code': '164824', 'name': '印度LOF', 'index': 'LOF'},
+    {'code': '160719', 'name': '嘉实黄金LOF', 'index': 'LOF'},
+    {'code': '161116', 'name': '易方达黄金LOF', 'index': 'LOF'},
+    {'code': '160723', 'name': '嘉实原油LOF', 'index': 'LOF'},
+    {'code': '161129', 'name': '易方达原油LOF', 'index': 'LOF'},
+    {'code': '160216', 'name': '国泰商品LOF', 'index': 'LOF'},
 ]
 
 EXCLUDED_CODES = []
@@ -1095,7 +1115,9 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                          dax_results: List[Dict] = None, dax_insufficient: List[str] = None,
                          dax_ft: Dict = None,
                          others_results: List[Dict] = None, others_insufficient: List[str] = None,
-                         others_ft: Dict = None) -> Path:
+                         others_ft: Dict = None,
+                         lof_results: List[Dict] = None, lof_insufficient: List[str] = None,
+                         lof_ft: Dict = None) -> Path:
     """生成 report.json 供小程序使用"""
     import json
 
@@ -1149,7 +1171,7 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "stars": stars,
                 "rotation_pool": r.get('rotation_pool', False),
                 "rotation_bonus": r.get('rotation_bonus', 0),
-                "holdings": _get_holdings_with_prices(r['code']) if index_type == 'OTHERS' else None
+                "holdings": _get_holdings_with_prices(r['code']) if index_type in ('OTHERS', 'LOF') else None
             })
 
         # 净值日期（取第一个ETF的nav_date）
@@ -1175,6 +1197,8 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
         sections.append(build_section('DAX', dax_results, dax_insufficient or [], dax_ft))
     if nikkei_results is not None:
         sections.append(build_section('NIKKEI', nikkei_results, nikkei_insufficient or [], nk_ft))
+    if lof_results is not None:
+        sections.append(build_section('LOF', lof_results, lof_insufficient or [], lof_ft))
     if others_results is not None:
         sections.append(build_section('OTHERS', others_results, others_insufficient or [], others_ft))
 
@@ -1911,7 +1935,8 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
                    holdings: List[str] = None, nq_ft: Dict = None, es_ft: Dict = None, ym_ft: Dict = None,
                    nikkei_results: List[Dict] = None, nikkei_insufficient: List[str] = None, nk_ft: Dict = None,
                    dax_results: List[Dict] = None, dax_insufficient: List[str] = None, dax_ft: Dict = None,
-                   others_results: List[Dict] = None, others_insufficient: List[str] = None):
+                   others_results: List[Dict] = None, others_insufficient: List[str] = None,
+                   lof_results: List[Dict] = None, lof_insufficient: List[str] = None):
     """保存分析报告为markdown文件"""
     # 使用当前时间作为报告生成时间（而非数据采集时间）
     now = datetime.now()
@@ -1957,6 +1982,10 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
     # 其他表格
     if others_results:
         lines.append(generate_md_table('OTHERS', others_results, others_insufficient))
+
+    # LOF表格
+    if lof_results:
+        lines.append(generate_md_table('LOF', lof_results, lof_insufficient))
 
     # 公式说明（合并，仅出现一次）
     lines.append(f"> 格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）")
@@ -2139,7 +2168,7 @@ def main():
     args = parser.parse_args()
 
     # 所有支持的指数类型
-    INDEX_TYPES = ['NASDAQ', 'SP500', 'DAX', 'NIKKEI', 'OTHERS']
+    INDEX_TYPES = ['NASDAQ', 'SP500', 'DAX', 'NIKKEI', 'LOF', 'OTHERS']
 
     # 分析各指数ETF
     all_results = {}
@@ -2158,11 +2187,13 @@ def main():
         nikkei_results = all_results.get('NIKKEI', [])
         dax_results = all_results.get('DAX', [])
         others_results = all_results.get('OTHERS', [])
+        lof_results = all_results.get('LOF', [])
         nasdaq_insufficient = all_insufficient.get('NASDAQ', [])
         sp500_insufficient = all_insufficient.get('SP500', [])
         nikkei_insufficient = all_insufficient.get('NIKKEI', [])
         dax_insufficient = all_insufficient.get('DAX', [])
         others_insufficient = all_insufficient.get('OTHERS', [])
+        lof_insufficient = all_insufficient.get('LOF', [])
         generate_report_json(nasdaq_results, sp500_results,
                              nasdaq_insufficient, sp500_insufficient,
                              nq_ft=all_ft_info.get('NASDAQ'),
@@ -2175,7 +2206,10 @@ def main():
                              dax_ft=all_ft_info.get('DAX'),
                              others_results=others_results,
                              others_insufficient=others_insufficient,
-                             others_ft=all_ft_info.get('OTHERS'))
+                             others_ft=all_ft_info.get('OTHERS'),
+                             lof_results=lof_results,
+                             lof_insufficient=lof_insufficient,
+                             lof_ft=all_ft_info.get('LOF'))
         # 同时生成 HTML 供 web 展示
         now = datetime.now()
         today = now.strftime('%Y-%m-%d')
@@ -2294,11 +2328,13 @@ td.changed{transition:background .5s;background:#fff9c4 !important;}
     dax_results = all_results.get('DAX', [])
     nikkei_results = all_results.get('NIKKEI', [])
     others_results = all_results.get('OTHERS', [])
+    lof_results = all_results.get('LOF', [])
     nasdaq_insufficient = all_insufficient.get('NASDAQ', [])
     sp500_insufficient = all_insufficient.get('SP500', [])
     dax_insufficient = all_insufficient.get('DAX', [])
     nikkei_insufficient = all_insufficient.get('NIKKEI', [])
     others_insufficient = all_insufficient.get('OTHERS', [])
+    lof_insufficient = all_insufficient.get('LOF', [])
     save_md_report(nasdaq_results, sp500_results, None,
                    nasdaq_insufficient, sp500_insufficient, None,
                    args.holding,
@@ -2311,7 +2347,9 @@ td.changed{transition:background .5s;background:#fff9c4 !important;}
                    nikkei_insufficient=nikkei_insufficient,
                    nk_ft=all_ft_info.get('NIKKEI'),
                    others_results=others_results,
-                   others_insufficient=others_insufficient)
+                   others_insufficient=others_insufficient,
+                   lof_results=lof_results,
+                   lof_insufficient=lof_insufficient)
     print()
 
 

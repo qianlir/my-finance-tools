@@ -32,7 +32,10 @@ function MobTabs({ tab, setTab }) {
 /* ── Mobile Overview ── */
 function MobOverview({ setTab, setIdx }) {
   if (!REPORT.sections.length) return null;
-  const topPicks = REPORT.sections.map(s => ({ s, e: s.etfs[0] }));
+  const alwaysShow = ['NASDAQ', 'SP500'];
+  const topPicks = REPORT.sections
+    .map(s => ({ s, e: s.etfs[0] }))
+    .filter(({ s, e }) => alwaysShow.includes(s.index_type) || (e && e.stars >= 3));
 
   return (
     <div style={{ padding: '12px 16px 68px' }}>

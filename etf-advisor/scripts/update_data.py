@@ -59,10 +59,25 @@ ETF_LIST = [
     {'code': '513520', 'name': '日经ETF华夏', 'company': '华夏基金', 'market': 'sh', 'index': 'NIKKEI'},
     {'code': '513880', 'name': '日经225ETF华安', 'company': '华安基金', 'market': 'sh', 'index': 'NIKKEI'},
     # OTHERS（持仓估算 + 道琼斯期货）
+    # OTHERS ETF
     {'code': '159509', 'name': '纳指科技ETF', 'company': '景顺长城', 'market': 'sz', 'index': 'OTHERS'},
     {'code': '159529', 'name': '标普消费ETF', 'company': '华夏基金', 'market': 'sz', 'index': 'OTHERS'},
-    {'code': '501312', 'name': '海外科技LOF', 'company': '国泰基金', 'market': 'sh', 'index': 'OTHERS'},
-    {'code': '162415', 'name': '美国消费LOF', 'company': '华宝基金', 'market': 'sz', 'index': 'OTHERS'},
+    {'code': '513290', 'name': '美国生物ETF', 'company': '国泰基金', 'market': 'sh', 'index': 'OTHERS'},
+    {'code': '513080', 'name': '法国CAC40ETF', 'company': '华安基金', 'market': 'sh', 'index': 'OTHERS'},
+    # LOF
+    {'code': '501312', 'name': '海外科技LOF', 'company': '国泰基金', 'market': 'sh', 'index': 'LOF'},
+    {'code': '162415', 'name': '美国消费LOF', 'company': '华宝基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161128', 'name': '标普科技LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
+    {'code': '160140', 'name': '美国REIT LOF', 'company': '诺安基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161126', 'name': '标普医药LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161127', 'name': '标普生物LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
+    {'code': '162411', 'name': '华宝油气LOF', 'company': '华宝基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '164824', 'name': '印度LOF', 'company': '工银瑞信', 'market': 'sz', 'index': 'LOF'},
+    {'code': '160719', 'name': '嘉实黄金LOF', 'company': '嘉实基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161116', 'name': '易方达黄金LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
+    {'code': '160723', 'name': '嘉实原油LOF', 'company': '嘉实基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161129', 'name': '易方达原油LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
+    {'code': '160216', 'name': '国泰商品LOF', 'company': '国泰基金', 'market': 'sz', 'index': 'LOF'},
 ]
 
 

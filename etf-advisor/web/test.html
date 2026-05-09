@@ -1,0 +1,11 @@
+<script>
+fetch('/data/report.json?t=' + Date.now())
+  .then(r => r.json())
+  .then(d => {
+    document.body.innerHTML = '<pre>' + 
+      'sections: ' + d.sections.length + '\n' +
+      d.sections.map(s => s.index_name + ': ' + s.etfs.length).join('\n') + 
+      '</pre>';
+  })
+  .catch(e => document.body.innerHTML = '<pre>ERROR: ' + e + '</pre>');
+</script>
