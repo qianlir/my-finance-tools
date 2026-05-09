@@ -328,3 +328,7 @@ function MobRotation() {
     )
   );
 }
+
+window.PCRotation = PCRotation;
+window.MobRotation = MobRotation;
+

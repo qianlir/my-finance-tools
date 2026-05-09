@@ -78,6 +78,12 @@ INDEX_CONFIG = {
         'name_cn': '德国DAX',
         'nav_label': '欧股收盘',
         'use_index': True,
+    },
+    'OTHERS': {
+        'symbol': '',
+        'name_cn': '其他',
+        'nav_label': '美股收盘',
+        'use_holdings': True,
     }
 }
 
@@ -94,13 +100,13 @@ ETF_CONFIG = [
     {'code': '513870', 'name': '富国纳指ETF', 'index': 'NASDAQ'},
     {'code': '513390', 'name': '博时纳指ETF', 'index': 'NASDAQ'},
     {'code': '513110', 'name': '南方纳指ETF', 'index': 'NASDAQ'},
+    {'code': '161130', 'name': '纳斯达克100LOF', 'index': 'NASDAQ'},
     # 标普500ETF
     {'code': '513500', 'name': '博时标普ETF', 'index': 'SP500'},
     {'code': '159655', 'name': '华夏标普ETF', 'index': 'SP500'},
     {'code': '513650', 'name': '南方标普ETF', 'index': 'SP500'},
     {'code': '159612', 'name': '国泰标普ETF', 'index': 'SP500'},
-    # 道琼斯ETF
-    {'code': '513400', 'name': '国泰道琼斯ETF', 'index': 'DOW'},
+    {'code': '161125', 'name': '标普500LOF', 'index': 'SP500'},
     # 德国DAX ETF
     {'code': '513030', 'name': '德国ETF华安', 'index': 'DAX'},
     {'code': '159561', 'name': '德国ETF嘉实', 'index': 'DAX'},
@@ -109,10 +115,15 @@ ETF_CONFIG = [
     {'code': '513000', 'name': '日经225ETF易方达', 'index': 'NIKKEI'},
     {'code': '513520', 'name': '日经ETF华夏', 'index': 'NIKKEI'},
     {'code': '513880', 'name': '日经225ETF华安', 'index': 'NIKKEI'},
+    # 其他
+    {'code': '513400', 'name': '国泰道琼斯ETF', 'index': 'OTHERS'},
+    {'code': '159509', 'name': '纳指科技ETF', 'index': 'OTHERS'},
+    {'code': '159529', 'name': '标普消费ETF', 'index': 'OTHERS'},
+    {'code': '501312', 'name': '海外科技LOF', 'index': 'OTHERS'},
+    {'code': '162415', 'name': '美国消费LOF', 'index': 'OTHERS'},
 ]
 
-# 排除纳指科技ETF
-EXCLUDED_CODES = ['159509']
+EXCLUDED_CODES = []
 
 # 多维度时间窗口
 PERIODS = [
@@ -271,6 +282,46 @@ def get_previous_data() -> Tuple[Dict[str, float], str]:  # 返回 (价格字典
     previous = {row['code']: row['price'] for row in cursor.fetchall()}
     conn.close()
     return previous, prev_date
+
+
+def _get_holdings_with_prices(fund_code: str) -> list:
+    """获取基金持仓及对应的股票价格"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT h.ticker, h.stock_name, h.weight_pct,
+               p.price, p.prev_close, p.after_hours, p.change_pct
+        FROM fund_holdings h
+        LEFT JOIN stock_prices p ON h.ticker = p.ticker
+        WHERE h.fund_code = ?
+        ORDER BY h.weight_pct DESC
+    """, (fund_code,))
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        result.append({
+            'ticker': r['ticker'],
+            'name': r['stock_name'],
+            'weight': round(r['weight_pct'], 2),
+            'price': round(r['price'], 2) if r['price'] else None,
+            'prev_close': round(r['prev_close'], 2) if r['prev_close'] else None,
+            'after_hours': round(r['after_hours'], 2) if r['after_hours'] and r['after_hours'] > 0 else None,
+            'change_pct': round(r['change_pct'], 2) if r['change_pct'] is not None else None,
+        })
+    return result
+
+
+def _get_fund_config(code: str) -> dict:
+    """从 fund_config 表获取基金配置"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM fund_config WHERE code = ?", (code,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
 
 
 def get_nav_info(code: str) -> Dict:
@@ -662,7 +713,11 @@ def get_nav_date_futures_close(nav_date: str, index_type: str) -> float:
 
     cfg = INDEX_CONFIG.get(index_type, {})
 
-    # 日经/DAX：分母始终用指数收盘（净值基准不变）
+    # 持仓型（OTHERS）：不需要期货/指数比值，返回 0
+    if cfg.get('use_holdings'):
+        return 0
+
+    # 日经/DAX：用指数收盘
     if cfg.get('use_index'):
         return _get_index_nav_date_close(nav_date, cfg['close_col'])
 
@@ -726,11 +781,16 @@ def get_current_futures_price(index_type: str) -> float:
     if index_type not in INDEX_CONFIG:
         return 0
 
+    cfg = INDEX_CONFIG.get(index_type, {})
+    if cfg.get('use_holdings'):
+        return 0
     # 日经：开盘时用指数，非开盘时用期货
     if index_type == 'NIKKEI':
         close_col = 'nk_idx_close' if _is_nikkei_market_hours() else 'nk_close'
     else:
-        close_col = INDEX_CONFIG[index_type]['close_col']
+        close_col = cfg.get('close_col')
+        if not close_col:
+            return 0
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -828,18 +888,44 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
         nav_date = nav_info['nav_date']  # 净值实际日期(美股收盘日)
         nav_change = nav_info['nav_change']
 
-        # 用期货价格比值法估算溢价
-        nav_date_close = get_nav_date_futures_close(nav_date, index_type)
-        current_futures_price = get_current_futures_price(index_type)
-        if nav and nav_date_close and current_futures_price:
-            estimated_nav = nav * (current_futures_price / nav_date_close)
-            display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-        elif nav:
-            estimated_nav = nav
-            display_premium = current.get('premium_rate', 0)
+        # 估算溢价：根据估算方式选择
+        cfg = INDEX_CONFIG.get(index_type, {})
+        if cfg.get('use_holdings'):
+            # 持仓估算：查 fund_config 确定具体方式
+            _fc = _get_fund_config(code)
+            if _fc and _fc['estimate_method'] == 'holdings' and nav:
+                import sys; sys.path.insert(0, str(SCRIPT_DIR))
+                from update_data import estimate_nav_by_holdings
+                estimated_nav, _est_chg = estimate_nav_by_holdings(code, nav)
+                display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+            elif _fc and _fc['estimate_method'] == 'futures' and _fc.get('estimate_symbol') and nav:
+                # OTHERS 中的期货型（如道琼斯）
+                _sym = _fc['estimate_symbol']
+                _idx_type_for_sym = {'NQ': 'NASDAQ', 'ES': 'SP500', 'YM': 'DOW'}.get(_sym, 'DOW')
+                nav_date_close = get_nav_date_futures_close(nav_date, _idx_type_for_sym)
+                current_futures_price = get_current_futures_price(_idx_type_for_sym)
+                if nav_date_close and current_futures_price:
+                    estimated_nav = nav * (current_futures_price / nav_date_close)
+                    display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+                else:
+                    estimated_nav = nav
+                    display_premium = current.get('premium_rate', 0)
+            else:
+                estimated_nav = nav
+                display_premium = current.get('premium_rate', 0)
         else:
-            estimated_nav = None
-            display_premium = current.get('premium_rate', 0)
+            # 期货/指数比值法（现有逻辑）
+            nav_date_close = get_nav_date_futures_close(nav_date, index_type)
+            current_futures_price = get_current_futures_price(index_type)
+            if nav and nav_date_close and current_futures_price:
+                estimated_nav = nav * (current_futures_price / nav_date_close)
+                display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+            elif nav:
+                estimated_nav = nav
+                display_premium = current.get('premium_rate', 0)
+            else:
+                estimated_nav = None
+                display_premium = current.get('premium_rate', 0)
 
         avg_by_period = multi_avg.get(code, {})
 
@@ -894,9 +980,9 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
     # 期货复合涨幅 = (1+r1) * (1+r2) * ... - 1
     futures_info = get_futures_info()
     avg_change = 0.0
-    if futures_info and len(futures_info) > 0 and index_type in INDEX_CONFIG:
-        # 根据指数类型选择对应的期货数据
-        change_key = INDEX_CONFIG[index_type]['change_col'].replace('_pct', '_change')  # nq_change_pct -> nq_change
+    idx_cfg = INDEX_CONFIG.get(index_type, {})
+    if futures_info and len(futures_info) > 0 and idx_cfg.get('change_col'):
+        change_key = idx_cfg['change_col'].replace('_pct', '_change')
         changes = [f.get(change_key, 0) for f in futures_info if f.get(change_key) is not None]
         if changes:
             # 复合涨幅 = (1+r1) * (1+r2) * ... - 1
@@ -1007,7 +1093,9 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                          nikkei_results: List[Dict] = None, nikkei_insufficient: List[str] = None,
                          nk_ft: Dict = None,
                          dax_results: List[Dict] = None, dax_insufficient: List[str] = None,
-                         dax_ft: Dict = None) -> Path:
+                         dax_ft: Dict = None,
+                         others_results: List[Dict] = None, others_insufficient: List[str] = None,
+                         others_ft: Dict = None) -> Path:
     """生成 report.json 供小程序使用"""
     import json
 
@@ -1060,7 +1148,8 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "recommendation": rec_text,
                 "stars": stars,
                 "rotation_pool": r.get('rotation_pool', False),
-                "rotation_bonus": r.get('rotation_bonus', 0)
+                "rotation_bonus": r.get('rotation_bonus', 0),
+                "holdings": _get_holdings_with_prices(r['code']) if index_type == 'OTHERS' else None
             })
 
         # 净值日期（取第一个ETF的nav_date）
@@ -1082,12 +1171,12 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
         build_section('NASDAQ', nasdaq_results, nasdaq_insufficient, nq_ft),
         build_section('SP500', sp500_results, sp500_insufficient, es_ft),
     ]
-    if dow_results is not None:
-        sections.append(build_section('DOW', dow_results, dow_insufficient or [], ym_ft))
     if dax_results is not None:
         sections.append(build_section('DAX', dax_results, dax_insufficient or [], dax_ft))
     if nikkei_results is not None:
         sections.append(build_section('NIKKEI', nikkei_results, nikkei_insufficient or [], nk_ft))
+    if others_results is not None:
+        sections.append(build_section('OTHERS', others_results, others_insufficient or [], others_ft))
 
     report = {
         "date": today,
@@ -1821,7 +1910,8 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
                    dow_insufficient: List[str] = None,
                    holdings: List[str] = None, nq_ft: Dict = None, es_ft: Dict = None, ym_ft: Dict = None,
                    nikkei_results: List[Dict] = None, nikkei_insufficient: List[str] = None, nk_ft: Dict = None,
-                   dax_results: List[Dict] = None, dax_insufficient: List[str] = None, dax_ft: Dict = None):
+                   dax_results: List[Dict] = None, dax_insufficient: List[str] = None, dax_ft: Dict = None,
+                   others_results: List[Dict] = None, others_insufficient: List[str] = None):
     """保存分析报告为markdown文件"""
     # 使用当前时间作为报告生成时间（而非数据采集时间）
     now = datetime.now()
@@ -1863,6 +1953,10 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
     # 日经225表格
     if nikkei_results:
         lines.append(generate_md_table('NIKKEI', nikkei_results, nikkei_insufficient, nk_ft))
+
+    # 其他表格
+    if others_results:
+        lines.append(generate_md_table('OTHERS', others_results, others_insufficient))
 
     # 公式说明（合并，仅出现一次）
     lines.append(f"> 格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）")
@@ -2045,7 +2139,7 @@ def main():
     args = parser.parse_args()
 
     # 所有支持的指数类型
-    INDEX_TYPES = ['NASDAQ', 'SP500', 'DOW', 'DAX', 'NIKKEI']
+    INDEX_TYPES = ['NASDAQ', 'SP500', 'DAX', 'NIKKEI', 'OTHERS']
 
     # 分析各指数ETF
     all_results = {}
@@ -2061,27 +2155,27 @@ def main():
     if args.server:
         nasdaq_results = all_results.get('NASDAQ', [])
         sp500_results = all_results.get('SP500', [])
-        dow_results = all_results.get('DOW', [])
         nikkei_results = all_results.get('NIKKEI', [])
+        dax_results = all_results.get('DAX', [])
+        others_results = all_results.get('OTHERS', [])
         nasdaq_insufficient = all_insufficient.get('NASDAQ', [])
         sp500_insufficient = all_insufficient.get('SP500', [])
-        dow_insufficient = all_insufficient.get('DOW', [])
         nikkei_insufficient = all_insufficient.get('NIKKEI', [])
-        dax_results = all_results.get('DAX', [])
         dax_insufficient = all_insufficient.get('DAX', [])
+        others_insufficient = all_insufficient.get('OTHERS', [])
         generate_report_json(nasdaq_results, sp500_results,
                              nasdaq_insufficient, sp500_insufficient,
                              nq_ft=all_ft_info.get('NASDAQ'),
                              es_ft=all_ft_info.get('SP500'),
-                             ym_ft=all_ft_info.get('DOW'),
-                             dow_results=dow_results,
-                             dow_insufficient=dow_insufficient,
                              nikkei_results=nikkei_results,
                              nikkei_insufficient=nikkei_insufficient,
                              nk_ft=all_ft_info.get('NIKKEI'),
                              dax_results=dax_results,
                              dax_insufficient=dax_insufficient,
-                             dax_ft=all_ft_info.get('DAX'))
+                             dax_ft=all_ft_info.get('DAX'),
+                             others_results=others_results,
+                             others_insufficient=others_insufficient,
+                             others_ft=all_ft_info.get('OTHERS'))
         # 同时生成 HTML 供 web 展示
         now = datetime.now()
         today = now.strftime('%Y-%m-%d')
@@ -2197,26 +2291,27 @@ td.changed{transition:background .5s;background:#fff9c4 !important;}
     # 保存MD报告
     nasdaq_results = all_results.get('NASDAQ', [])
     sp500_results = all_results.get('SP500', [])
-    dow_results = all_results.get('DOW', [])
     dax_results = all_results.get('DAX', [])
     nikkei_results = all_results.get('NIKKEI', [])
+    others_results = all_results.get('OTHERS', [])
     nasdaq_insufficient = all_insufficient.get('NASDAQ', [])
     sp500_insufficient = all_insufficient.get('SP500', [])
-    dow_insufficient = all_insufficient.get('DOW', [])
     dax_insufficient = all_insufficient.get('DAX', [])
     nikkei_insufficient = all_insufficient.get('NIKKEI', [])
-    save_md_report(nasdaq_results, sp500_results, dow_results,
-                   nasdaq_insufficient, sp500_insufficient, dow_insufficient,
+    others_insufficient = all_insufficient.get('OTHERS', [])
+    save_md_report(nasdaq_results, sp500_results, None,
+                   nasdaq_insufficient, sp500_insufficient, None,
                    args.holding,
                    nq_ft=all_ft_info.get('NASDAQ'),
                    es_ft=all_ft_info.get('SP500'),
-                   ym_ft=all_ft_info.get('DOW'),
                    dax_results=dax_results,
                    dax_insufficient=dax_insufficient,
                    dax_ft=all_ft_info.get('DAX'),
                    nikkei_results=nikkei_results,
                    nikkei_insufficient=nikkei_insufficient,
-                   nk_ft=all_ft_info.get('NIKKEI'))
+                   nk_ft=all_ft_info.get('NIKKEI'),
+                   others_results=others_results,
+                   others_insufficient=others_insufficient)
     print()
 
 

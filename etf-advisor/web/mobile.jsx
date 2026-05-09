@@ -6,6 +6,7 @@ function MobTabs({ tab, setTab }) {
   const ts = [
     { k: 'overview', l: '总览', d: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10' },
     { k: 'premium', l: '溢价分析', d: 'M18 20V10 M12 20V4 M6 20v-6' },
+    { k: 'rotation', l: '纳指轮动', d: 'M17 1l4 4-4 4 M3 11V9a4 4 0 014-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 01-4 4H3' },
   ];
   return (
     <div style={{

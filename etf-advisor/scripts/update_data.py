@@ -33,7 +33,7 @@ ETF_LIST = [
     {'code': '513100', 'name': '国泰纳指ETF', 'company': '国泰基金', 'market': 'sh', 'index': 'NASDAQ'},
     {'code': '159941', 'name': '广发纳指ETF', 'company': '广发基金', 'market': 'sz', 'index': 'NASDAQ'},
     {'code': '159660', 'name': '汇添富纳指ETF', 'company': '汇添富基金', 'market': 'sz', 'index': 'NASDAQ'},
-    {'code': '159509', 'name': '嘉实纳指科技ETF', 'company': '嘉实基金', 'market': 'sz', 'index': 'NASDAQ'},
+    # 159509 纳指科技已移到 OTHERS
     {'code': '159501', 'name': '嘉实纳指ETF', 'company': '嘉实基金', 'market': 'sz', 'index': 'NASDAQ'},
     {'code': '159632', 'name': '华安纳指ETF', 'company': '华安基金', 'market': 'sz', 'index': 'NASDAQ'},
     {'code': '159659', 'name': '招商纳指ETF', 'company': '招商基金', 'market': 'sz', 'index': 'NASDAQ'},
@@ -41,11 +41,13 @@ ETF_LIST = [
     {'code': '513870', 'name': '富国纳指ETF', 'company': '富国基金', 'market': 'sh', 'index': 'NASDAQ'},
     {'code': '513390', 'name': '博时纳指ETF', 'company': '博时基金', 'market': 'sh', 'index': 'NASDAQ'},
     {'code': '513110', 'name': '南方纳指ETF', 'company': '南方基金', 'market': 'sh', 'index': 'NASDAQ'},
+    {'code': '161130', 'name': '纳斯达克100LOF', 'company': '易方达', 'market': 'sz', 'index': 'NASDAQ'},
     # 标普500ETF
     {'code': '513500', 'name': '博时标普ETF', 'company': '博时基金', 'market': 'sh', 'index': 'SP500'},
     {'code': '159655', 'name': '华夏标普ETF', 'company': '华夏基金', 'market': 'sz', 'index': 'SP500'},
     {'code': '513650', 'name': '南方标普ETF', 'company': '南方基金', 'market': 'sh', 'index': 'SP500'},
     {'code': '159612', 'name': '国泰标普ETF', 'company': '国泰基金', 'market': 'sz', 'index': 'SP500'},
+    {'code': '161125', 'name': '标普500LOF', 'company': '易方达', 'market': 'sz', 'index': 'SP500'},
     # 道琼斯ETF
     {'code': '513400', 'name': '国泰道琼斯ETF', 'company': '国泰基金', 'market': 'sh', 'index': 'DOW'},
     # 德国DAX ETF
@@ -56,6 +58,11 @@ ETF_LIST = [
     {'code': '513000', 'name': '日经225ETF易方达', 'company': '易方达', 'market': 'sh', 'index': 'NIKKEI'},
     {'code': '513520', 'name': '日经ETF华夏', 'company': '华夏基金', 'market': 'sh', 'index': 'NIKKEI'},
     {'code': '513880', 'name': '日经225ETF华安', 'company': '华安基金', 'market': 'sh', 'index': 'NIKKEI'},
+    # OTHERS（持仓估算 + 道琼斯期货）
+    {'code': '159509', 'name': '纳指科技ETF', 'company': '景顺长城', 'market': 'sz', 'index': 'OTHERS'},
+    {'code': '159529', 'name': '标普消费ETF', 'company': '华夏基金', 'market': 'sz', 'index': 'OTHERS'},
+    {'code': '501312', 'name': '海外科技LOF', 'company': '国泰基金', 'market': 'sh', 'index': 'OTHERS'},
+    {'code': '162415', 'name': '美国消费LOF', 'company': '华宝基金', 'market': 'sz', 'index': 'OTHERS'},
 ]
 
 
@@ -806,6 +813,192 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
         return False
 
 
+# ============= 持仓 + 美股价格 =============
+
+def fetch_holdings_from_eastmoney(fund_code):
+    """从东方财富获取基金持仓 Top10
+    返回: [{'ticker': 'AAPL', 'stock_name': '苹果', 'weight_pct': 12.31}, ...]
+    """
+    try:
+        url = f'https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={fund_code}&topline=10&year=&month=&rt=0.123'
+        resp = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://fundf10.eastmoney.com/'
+        }, timeout=15)
+        resp.encoding = 'utf-8'
+
+        from html.parser import HTMLParser
+        class _P(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.rows = []; self.cur = []; self.in_td = False; self.in_tbody = False; self.td = ""
+            def handle_starttag(self, t, a):
+                if t == 'tbody': self.in_tbody = True
+                if t == 'td' and self.in_tbody: self.in_td = True; self.td = ""
+            def handle_endtag(self, t):
+                if t == 'td': self.in_td = False; self.cur.append(self.td.strip())
+                if t == 'tr' and self.cur: self.rows.append(self.cur[:]); self.cur = []
+                if t == 'tbody': self.in_tbody = False
+            def handle_data(self, d):
+                if self.in_td: self.td += d.strip()
+
+        start = resp.text.find('content:"') + 9
+        end = resp.text.find('",aression')
+        p = _P()
+        p.feed(resp.text[start:end])
+
+        holdings = []
+        for r in p.rows:
+            if len(r) >= 7 and r[0].isdigit():
+                ticker = r[1].strip()
+                name = r[2].strip()
+                try:
+                    weight = float(r[6].rstrip('%'))
+                except ValueError:
+                    continue
+                holdings.append({'ticker': ticker, 'stock_name': name, 'weight_pct': weight})
+        return holdings
+    except Exception as e:
+        print(f"  获取持仓失败 {fund_code}: {e}")
+        return []
+
+
+def save_holdings(fund_code, holdings, report_date=None):
+    """保存持仓到 fund_holdings 表"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM fund_holdings WHERE fund_code = ?", (fund_code,))
+    rd = report_date or datetime.now().strftime('%Y-%m-%d')
+    for h in holdings:
+        c.execute("""
+            INSERT INTO fund_holdings (fund_code, ticker, stock_name, weight_pct, report_date)
+            VALUES (?, ?, ?, ?, ?)
+        """, (fund_code, h['ticker'], h['stock_name'], h['weight_pct'], rd))
+    conn.commit()
+    conn.close()
+    return len(holdings)
+
+
+def fetch_us_stock_prices(tickers):
+    """新浪批量获取美股价格
+    返回: {'AAPL': {'price': 293.32, 'prev_close': 287.44, 'after_hours': 0, 'change_pct': 2.05}, ...}
+    """
+    if not tickers:
+        return {}
+    symbols = ','.join(f'gb_{t.lower()}' for t in tickers)
+    try:
+        resp = requests.get(f'https://hq.sinajs.cn/list={symbols}', headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.sina.com.cn'
+        }, timeout=15)
+        resp.encoding = 'gbk'
+
+        result = {}
+        for line in resp.text.strip().split('\n'):
+            m = re.search(r'gb_(\w+)="([^"]+)"', line)
+            if not m:
+                continue
+            sym = m.group(1).upper()
+            f = m.group(2).split(',')
+            if len(f) < 27 or not f[1]:
+                continue
+            try:
+                price = float(f[1])
+                prev_close = float(f[26]) if f[26] else price
+                after_hours = float(f[17]) if len(f) > 17 and f[17] and float(f[17]) > 0 else 0
+                change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+                result[sym] = {
+                    'price': price, 'prev_close': prev_close,
+                    'after_hours': after_hours, 'change_pct': change_pct
+                }
+            except (ValueError, ZeroDivisionError):
+                continue
+        return result
+    except Exception as e:
+        print(f"  获取美股价格失败: {e}")
+        return {}
+
+
+def save_stock_prices(prices):
+    """保存美股价格到 stock_prices 表"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    for ticker, p in prices.items():
+        c.execute("""
+            INSERT OR REPLACE INTO stock_prices (ticker, price, prev_close, after_hours, change_pct, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (ticker, p['price'], p['prev_close'], p['after_hours'], p['change_pct'], now))
+    conn.commit()
+    conn.close()
+
+
+def update_all_holdings_prices():
+    """更新所有 holdings 型基金的持仓股票价格"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    # 获取所有需要持仓估算的基金
+    holdings_funds = conn.execute(
+        "SELECT code FROM fund_config WHERE estimate_method='holdings' AND enabled=1"
+    ).fetchall()
+
+    if not holdings_funds:
+        conn.close()
+        return
+
+    # 收集所有唯一的 ticker
+    all_tickers = set()
+    for f in holdings_funds:
+        rows = conn.execute("SELECT ticker FROM fund_holdings WHERE fund_code=?", (f['code'],)).fetchall()
+        for r in rows:
+            all_tickers.add(r['ticker'])
+    conn.close()
+
+    if not all_tickers:
+        return
+
+    # 批量获取价格
+    prices = fetch_us_stock_prices(list(all_tickers))
+    if prices:
+        save_stock_prices(prices)
+        print(f"  美股价格: 更新 {len(prices)} 只 ({', '.join(list(prices.keys())[:5])}...)")
+
+
+def estimate_nav_by_holdings(fund_code, confirmed_nav):
+    """用持仓股票涨跌估算 NAV
+    返回: (estimated_nav, change_pct) 或 (confirmed_nav, 0)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    holdings = conn.execute(
+        "SELECT ticker, weight_pct FROM fund_holdings WHERE fund_code=?", (fund_code,)
+    ).fetchall()
+    prices = {r['ticker']: r for r in conn.execute("SELECT * FROM stock_prices").fetchall()}
+    conn.close()
+
+    if not holdings:
+        return confirmed_nav, 0
+
+    total_weight = sum(h['weight_pct'] for h in holdings)
+    matched_weight = 0
+    weighted_change = 0
+
+    for h in holdings:
+        p = prices.get(h['ticker'])
+        if p and p['change_pct'] is not None:
+            weighted_change += h['weight_pct'] * p['change_pct']
+            matched_weight += h['weight_pct']
+
+    if matched_weight == 0:
+        return confirmed_nav, 0
+
+    # 归一化：用匹配到的权重占比
+    est_change = weighted_change / matched_weight
+    est_nav = confirmed_nav * (1 + est_change / 100)
+    return est_nav, est_change
+
+
 # ============= 数据库操作 =============
 def init_database():
     """初始化数据库"""
@@ -909,6 +1102,28 @@ def init_database():
         except Exception:
             pass
 
+    # V2: 新表
+    for ddl in [
+        """CREATE TABLE IF NOT EXISTS fund_config (
+            code TEXT PRIMARY KEY, name TEXT NOT NULL, company TEXT,
+            category TEXT NOT NULL, market TEXT DEFAULT 'sz',
+            estimate_method TEXT NOT NULL, estimate_symbol TEXT,
+            enabled INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0,
+            rotation_pool INTEGER DEFAULT 0, rotation_bonus REAL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP)""",
+        """CREATE TABLE IF NOT EXISTS fund_holdings (
+            fund_code TEXT NOT NULL, ticker TEXT NOT NULL,
+            stock_name TEXT, weight_pct REAL,
+            market TEXT DEFAULT 'US', report_date TEXT,
+            PRIMARY KEY (fund_code, ticker))""",
+        """CREATE TABLE IF NOT EXISTS stock_prices (
+            ticker TEXT PRIMARY KEY, price REAL, prev_close REAL,
+            after_hours REAL, change_pct REAL, updated_at TEXT)""",
+        """CREATE TABLE IF NOT EXISTS admin_config (
+            key TEXT PRIMARY KEY, value TEXT)""",
+    ]:
+        cursor.execute(ddl)
+
     conn.commit()
     conn.close()
 
@@ -954,7 +1169,7 @@ def calculate_index_changes():
     cursor = conn.cursor()
 
     # 纳斯达克ETF
-    nasdaq_codes = ['513100', '159941', '159660', '159509', '159501', '159632', '159659', '513300', '513870', '513390', '513110']
+    nasdaq_codes = ['513100', '159941', '159660', '159501', '159632', '159659', '513300', '513870', '513390', '513110']
     # 标普500ETF
     sp500_codes = ['513500', '159655', '513650', '159612']
 
@@ -1318,6 +1533,10 @@ def update_realtime():
                     print(f"{name}历史: 回补 {n} 天")
             except Exception as e:
                 print(f"{name}回补失败: {e}")
+
+        # 更新持仓型基金的美股价格
+        print("\n获取持仓股票价格...")
+        update_all_holdings_prices()
 
     # 写入快照文件
     write_snapshot(records)

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千里知投 · Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; background: #f5f5f5; color: #333; }
+  .container { max-width: 900px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin: 24px 0 12px; color: #666; }
+  .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px; border-bottom: 2px solid #eee; color: #999; font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover { background: #fafafa; }
+  input, select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+  input:focus, select:focus { outline: none; border-color: #1a73e8; }
+  button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .btn-primary { background: #1a73e8; color: #fff; }
+  .btn-primary:hover { background: #1557b0; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { background: #dc3545; color: #fff; }
+  .btn-outline { background: #fff; border: 1px solid #ddd; color: #666; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .badge-on { background: #e6f4ea; color: #137333; }
+  .badge-off { background: #fce8e6; color: #c5221f; }
+  .flex { display: flex; align-items: center; gap: 8px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .mt { margin-top: 12px; }
+  .text-muted { color: #999; font-size: 12px; }
+  .text-mono { font-family: monospace; }
+  #login { max-width: 320px; margin: 100px auto; }
+  #login input { width: 100%; margin-bottom: 8px; }
+  .nav { display: flex; gap: 16px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+  .nav a { text-decoration: none; color: #666; font-size: 14px; padding-bottom: 8px; }
+  .nav a.active { color: #1a73e8; border-bottom: 2px solid #1a73e8; }
+  .chg-up { color: #c5221f; }
+  .chg-dn { color: #137333; }
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: center; justify-content: center; }
+  .modal { background: #fff; border-radius: 8px; padding: 24px; width: 400px; max-width: 90vw; }
+  .modal h3 { margin-bottom: 16px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+  .form-group input, .form-group select { width: 100%; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+
+<script>
+const API = '/admin/api';
+let TOKEN = localStorage.getItem('admin_token') || '';
+
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(API + path, opts);
+  const data = await resp.json();
+  if (resp.status === 401) { TOKEN = ''; localStorage.removeItem('admin_token'); render(); }
+  return { ok: resp.ok, data };
+}
+
+// === State ===
+let page = 'funds';
+let funds = [];
+let holdings = [];
+let prices = [];
+let editFund = null;
+let showAddModal = false;
+let showAddRow = false;
+let detailCode = null;
+
+// === Render ===
+function render() {
+  const app = document.getElementById('app');
+  if (!TOKEN) { app.innerHTML = renderLogin(); return; }
+  app.innerHTML = renderNav() + (
+    page === 'funds' ? renderFunds() :
+    page === 'prices' ? renderPrices() :
+    page === 'detail' ? renderDetail() :
+    page === 'settings' ? renderSettings() : ''
+  ) + (showAddModal ? renderAddModal() : '');
+}
+
+function renderLogin() {
+  return `<div id="login" class="card">
+    <h1>千里知投 · Admin</h1>
+    <input type="password" id="pw" placeholder="密码" onkeypress="if(event.key==='Enter')doLogin()">
+    <button class="btn-primary" style="width:100%" onclick="doLogin()">登录</button>
+    <p id="login-err" class="text-muted mt" style="color:#c5221f"></p>
+  </div>`;
+}
+
+function renderNav() {
+  const tabs = [['funds','基金管理'], ['prices','实时价格'], ['settings','设置']];
+  return `<div class="flex-between">
+    <h1>千里知投 · Admin</h1>
+    <button class="btn-outline btn-sm" onclick="logout()">退出</button>
+  </div>
+  <div class="nav">${tabs.map(([k,l]) =>
+    `<a href="#" class="${page===k?'active':''}" onclick="switchPage('${k}')">${l}</a>`
+  ).join('')}</div>`;
+}
+
+function renderFunds() {
+  const cats = {};
+  funds.forEach(f => { (cats[f.category] = cats[f.category] || []).push(f); });
+  let html = `<div class="flex-between"><h2>全部基金 (${funds.length})</h2>
+    <button class="btn-primary btn-sm" onclick="showAddModal=true;render()">+ 添加基金</button></div>`;
+  for (const [cat, list] of Object.entries(cats)) {
+    html += `<div class="card"><h2 style="margin:0 0 8px">${cat} (${list.length})</h2>
+    <table><thead><tr><th>代码</th><th>名称</th><th>估算</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
+    for (const f of list) {
+      html += `<tr>
+        <td class="text-mono">${f.code}</td>
+        <td>${f.name}${f.rotation_pool ? ' <span style="color:#A8342A">◆</span>' : ''}</td>
+        <td><span class="text-muted">${f.estimate_method}${f.estimate_symbol ? ':'+f.estimate_symbol : ''}</span></td>
+        <td><span class="badge ${f.enabled?'badge-on':'badge-off'}">${f.enabled?'启用':'禁用'}</span></td>
+        <td class="flex">
+          <button class="btn-outline btn-sm" onclick="viewDetail('${f.code}')">详情</button>
+          <button class="btn-outline btn-sm" onclick="toggleFund('${f.code}',${f.enabled?0:1})">${f.enabled?'禁用':'启用'}</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  return html;
+}
+
+function renderDetail() {
+  const f = funds.find(x => x.code === detailCode);
+  if (!f) return '<p>未找到</p>';
+  let html = `<div class="flex-between">
+    <div class="flex"><button class="btn-outline btn-sm" onclick="page='funds';render()">← 返回</button>
+    <h2 style="margin:0">${f.name} (${f.code})</h2></div>
+    <div class="flex">
+      <button class="btn-primary btn-sm" onclick="syncHoldings('${f.code}')">同步持仓</button>
+      <button class="btn-danger btn-sm" onclick="deleteFund('${f.code}')">删除</button>
+    </div></div>`;
+
+  // Fund config
+  html += `<div class="card mt">
+    <div class="form-group"><label>类别</label><input value="${f.category}" onchange="updateField('${f.code}','category',this.value)"></div>
+    <div class="form-group"><label>估算方式</label>
+      <select onchange="updateField('${f.code}','estimate_method',this.value)">
+        <option ${f.estimate_method==='futures'?'selected':''} value="futures">期货</option>
+        <option ${f.estimate_method==='index'?'selected':''} value="index">指数</option>
+        <option ${f.estimate_method==='holdings'?'selected':''} value="holdings">持仓</option>
+      </select></div>
+    <div class="form-group"><label>期货/指数代码</label><input value="${f.estimate_symbol||''}" onchange="updateField('${f.code}','estimate_symbol',this.value)"></div>
+  </div>`;
+
+  // Holdings (only for holdings-type funds)
+  if (f.estimate_method !== 'holdings') return html;
+  html += `<div class="card mt"><div class="flex-between"><h2 style="margin:0">持仓 (${holdings.length})</h2>
+    <button class="btn-primary btn-sm" onclick="saveHoldings('${f.code}')">保存持仓</button></div>`;
+  html += '<table class="mt"><thead><tr><th>代码</th><th>名称</th><th>权重%</th><th>操作</th></tr></thead><tbody>';
+  let total = 0;
+  for (let i = 0; i < holdings.length; i++) {
+    const h = holdings[i];
+    total += h.weight_pct || 0;
+    html += `<tr>
+      <td><input class="text-mono" style="width:70px" value="${h.ticker}" onchange="holdings[${i}].ticker=this.value"></td>
+      <td><input style="width:120px" value="${h.stock_name}" onchange="holdings[${i}].stock_name=this.value"></td>
+      <td><input class="text-mono" style="width:60px" type="number" step="0.01" value="${(h.weight_pct||0).toFixed(2)}" onchange="holdings[${i}].weight_pct=parseFloat(this.value);render()"></td>
+      <td><button class="btn-outline btn-sm" style="color:#c5221f" onclick="holdings.splice(${i},1);render()">×</button></td>
+    </tr>`;
+  }
+  html += `<tr style="font-weight:600"><td></td><td>合计</td><td>${total.toFixed(2)}%</td><td></td></tr>`;
+  if (showAddRow) {
+    html += `<tr><td><input id="new-ticker" style="width:70px" placeholder="AAPL"></td>
+      <td><input id="new-name" style="width:120px" placeholder="名称"></td>
+      <td><input id="new-weight" style="width:60px" type="number" step="0.01" placeholder="0"></td>
+      <td><button class="btn-outline btn-sm" onclick="addHolding()">确定</button></td></tr>`;
+  }
+  html += '</tbody></table>';
+  if (!showAddRow) html += '<button class="btn-outline btn-sm mt" onclick="showAddRow=true;render()">+ 添加持仓</button>';
+  if (!holdings.length) html += '<p class="text-muted mt">暂无持仓，点击"同步持仓"自动获取，或手动添加</p>';
+  html += '</div>';
+  return html;
+}
+
+function renderPrices() {
+  let html = `<div class="flex-between"><h2>持仓股票实时价格 (${prices.length})</h2>
+    <button class="btn-outline btn-sm" onclick="loadPrices()">刷新</button></div><div class="card">`;
+  if (!prices.length) return html + '<p class="text-muted">无数据</p></div>';
+  html += '<table><thead><tr><th>代码</th><th>价格</th><th>昨收</th><th>涨跌%</th><th>盘后</th><th>更新</th></tr></thead><tbody>';
+  for (const p of prices) {
+    const cls = (p.change_pct||0) > 0 ? 'chg-up' : (p.change_pct||0) < 0 ? 'chg-dn' : '';
+    html += `<tr>
+      <td class="text-mono">${p.ticker}</td>
+      <td class="text-mono">${(p.price||0).toFixed(2)}</td>
+      <td class="text-mono">${(p.prev_close||0).toFixed(2)}</td>
+      <td class="text-mono ${cls}">${((p.change_pct||0) > 0 ? '+' : '') + (p.change_pct||0).toFixed(2)}%</td>
+      <td class="text-mono">${p.after_hours > 0 ? p.after_hours.toFixed(2) : '-'}</td>
+      <td class="text-muted">${(p.updated_at||'').slice(11,19)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderSettings() {
+  return `<div class="card"><h2 style="margin:0 0 12px">修改密码</h2>
+    <div class="form-group"><label>新密码</label><input type="password" id="new-pw"></div>
+    <button class="btn-primary" onclick="changePw()">保存</button>
+    <span id="pw-msg" class="text-muted mt"></span>
+  </div>`;
+}
+
+function renderAddModal() {
+  return `<div class="modal-overlay" onclick="showAddModal=false;render()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <h3>添加基金</h3>
+      <div class="form-group"><label>基金代码</label><input id="add-code" placeholder="如 159509"></div>
+      <div class="form-group"><label>名称</label><input id="add-name" placeholder="如 纳指科技ETF"></div>
+      <div class="form-group"><label>类别</label>
+        <select id="add-cat"><option value="OTHERS">其他</option><option value="NASDAQ">纳指</option>
+        <option value="SP500">标普</option><option value="DAX">DAX</option><option value="NIKKEI">日经</option></select></div>
+      <div class="form-group"><label>估算方式</label>
+        <select id="add-method"><option value="holdings">持仓</option><option value="futures">期货</option><option value="index">指数</option></select></div>
+      <div class="form-group"><label>市场</label>
+        <select id="add-market"><option value="sz">深圳</option><option value="sh">上海</option></select></div>
+      <div class="flex" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn-outline" onclick="showAddModal=false;render()">取消</button>
+        <button class="btn-primary" onclick="addFund()">添加</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// === Actions ===
+async function doLogin() {
+  const pw = document.getElementById('pw').value;
+  const { ok, data } = await api('POST', '/login', { password: pw });
+  if (ok) { TOKEN = data.token; localStorage.setItem('admin_token', TOKEN); await loadFunds(); render(); }
+  else { document.getElementById('login-err').textContent = data.error || '登录失败'; }
+}
+
+function logout() { TOKEN = ''; localStorage.removeItem('admin_token'); render(); }
+function switchPage(p) { page = p; if (p === 'prices') loadPrices(); render(); }
+
+async function loadFunds() {
+  const { ok, data } = await api('GET', '/funds');
+  if (ok) funds = data;
+}
+
+async function loadPrices() {
+  const { ok, data } = await api('GET', '/stock-prices');
+  if (ok) { prices = data; render(); }
+}
+
+async function toggleFund(code, enabled) {
+  await api('PUT', '/fund/' + code, { enabled });
+  await loadFunds(); render();
+}
+
+async function viewDetail(code) {
+  detailCode = code;
+  page = 'detail';
+  showAddRow = false;
+  const { ok, data } = await api('GET', '/fund/' + code + '/holdings');
+  if (ok) holdings = data;
+  render();
+}
+
+async function syncHoldings(code) {
+  const { ok, data } = await api('POST', '/fund/' + code + '/sync');
+  if (ok) { alert('同步成功: ' + data.holdings + ' 只持仓, ' + data.prices + ' 只价格'); viewDetail(code); }
+  else { alert('同步失败: ' + (data.error || '')); }
+}
+
+async function deleteFund(code) {
+  if (!confirm('确认删除 ' + code + '?')) return;
+  await api('DELETE', '/fund/' + code);
+  page = 'funds'; await loadFunds(); render();
+}
+
+async function updateField(code, field, value) {
+  const body = {}; body[field] = value;
+  await api('PUT', '/fund/' + code, body);
+  await loadFunds();
+}
+
+async function addFund() {
+  const body = {
+    code: document.getElementById('add-code').value,
+    name: document.getElementById('add-name').value,
+    category: document.getElementById('add-cat').value,
+    estimate_method: document.getElementById('add-method').value,
+    market: document.getElementById('add-market').value,
+  };
+  if (!body.code || !body.name) { alert('请填写代码和名称'); return; }
+  const { ok, data } = await api('POST', '/funds', body);
+  if (ok) { showAddModal = false; await loadFunds(); render(); }
+  else { alert(data.error || '添加失败'); }
+}
+
+async function saveHoldings(code) {
+  const { ok, data } = await api('PUT', '/fund/' + code + '/holdings', { holdings });
+  if (ok) { alert('保存成功: ' + data.count + ' 条'); viewDetail(code); }
+  else { alert('保存失败: ' + (data.error || '')); }
+}
+
+function addHolding() {
+  const ticker = document.getElementById('new-ticker').value.toUpperCase().trim();
+  const name = document.getElementById('new-name').value.trim();
+  const weight = parseFloat(document.getElementById('new-weight').value) || 0;
+  if (!ticker) { alert('请填写代码'); return; }
+  holdings.push({ ticker, stock_name: name, weight_pct: weight, report_date: new Date().toISOString().slice(0,10) });
+  showAddRow = false;
+  render();
+}
+
+async function changePw() {
+  const pw = document.getElementById('new-pw').value;
+  const { ok, data } = await api('PUT', '/settings/password', { password: pw });
+  document.getElementById('pw-msg').textContent = ok ? '已修改' : (data.error || '失败');
+}
+
+// === Init ===
+(async function() {
+  if (TOKEN) { await loadFunds(); }
+  render();
+})();
+</script>
+</body>
+</html>

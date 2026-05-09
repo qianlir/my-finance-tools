@@ -1098,7 +1098,7 @@ function PCPremium({
       marginTop: 16,
       lineHeight: 1.6
     }
-  }, "\u5206\u503C\u7EFC\u5408\u8003\u91CF\u5F53\u524D\u6EA2\u4EF7\u4E0E\u5386\u53F2\u5747\u503C\u7684\u504F\u79BB\u3001\u5B9E\u65F6\u6EA2\u4EF7\u9AD8\u4F4E\u548C\u8FD1\u4E00\u5E74\u51C0\u503C\u6DA8\u5E45\u3002\u6EA2\u4EF7\u8D8A\u4F4E\u4E8E\u5386\u53F2\u5747\u503C\u3001\u51C0\u503C\u6DA8\u5E45\u8D8A\u5927\u7684ETF\uFF0C\u5206\u503C\u8D8A\u9AD8\uFF0C\u8D8A\u503C\u5F97\u5173\u6CE8\u3002"));
+  }, "\u5206\u503C = 1Y\u51C0\u503C\u6DA8\u5E45\xD710% + (-\u7EFC\u5408\u8D85\u989D)\xD775% + (-\u4F30\u7B97\u6EA2\u4EF7)\xD715%"));
 }
 window.PCNav = PCNav;
 window.PCOverview = PCOverview;
@@ -1619,15 +1619,7 @@ function MobPremium({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "\u70B9\u51FB\u5C55\u5F00\u8BE6\u60C5"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: 'var(--font-ui)',
-      fontSize: 10,
-      color: 'var(--fg-muted)',
-      marginTop: 12,
-      lineHeight: 1.6
-    }
-  }, "\u5206\u503C\u7EFC\u5408\u8003\u91CF\u5F53\u524D\u6EA2\u4EF7\u4E0E\u5386\u53F2\u5747\u503C\u7684\u504F\u79BB\u3001\u5B9E\u65F6\u6EA2\u4EF7\u9AD8\u4F4E\u548C\u8FD1\u4E00\u5E74\u51C0\u503C\u6DA8\u5E45\u3002\u6EA2\u4EF7\u8D8A\u4F4E\u4E8E\u5386\u53F2\u5747\u503C\u3001\u51C0\u503C\u6DA8\u5E45\u8D8A\u5927\u7684ETF\uFF0C\u5206\u503C\u8D8A\u9AD8\uFF0C\u8D8A\u503C\u5F97\u5173\u6CE8\u3002"));
+  }, "\u70B9\u51FB\u5C55\u5F00\u8BE6\u60C5"));
 }
 window.MobTabs = MobTabs;
 window.MobOverview = MobOverview;

@@ -8,6 +8,7 @@ function PCNav({ tab, setTab }) {
   const tabs = [
     { k: 'overview', l: '总览' },
     { k: 'premium', l: '溢价分析' },
+    { k: 'rotation', l: '纳指轮动' },
   ];
   return (
     <header style={{
