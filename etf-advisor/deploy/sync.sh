@@ -7,24 +7,17 @@ LOCAL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Syncing $LOCAL_DIR → $REMOTE:$REMOTE_DIR ==="
 
-ssh $REMOTE "mkdir -p $REMOTE_DIR/{data,reports,memory/knowledge/etf,deploy}"
+ssh $REMOTE "mkdir -p $REMOTE_DIR/{data,web,memory/knowledge/etf,deploy}"
 
-rsync -avz --delete \
-  --exclude='__pycache__' \
-  --exclude='.git' \
-  --exclude='reports/img' \
-  --exclude='nasdaq-etf-advisor-test' \
-  --exclude='venv' \
-  --exclude='data/scheduled.log' \
-  --exclude='data/server.log' \
-  --exclude='data/cron.log' \
+rsync -avz --delete --exclude='__pycache__' --exclude='venv' \
   "$LOCAL_DIR/scripts/" "$REMOTE:$REMOTE_DIR/scripts/"
 
+rsync -avz --delete "$LOCAL_DIR/web/" "$REMOTE:$REMOTE_DIR/web/"
 rsync -avz "$LOCAL_DIR/deploy/" "$REMOTE:$REMOTE_DIR/deploy/"
 rsync -avz "$LOCAL_DIR/memory/knowledge/etf/" "$REMOTE:$REMOTE_DIR/memory/knowledge/etf/"
 rsync -avz "$LOCAL_DIR/data/etf_premium.db" "$REMOTE:$REMOTE_DIR/data/"
 [ -f "$LOCAL_DIR/data/report.json" ] && rsync -avz "$LOCAL_DIR/data/report.json" "$REMOTE:$REMOTE_DIR/data/"
-[ -f "$LOCAL_DIR/data/report.html" ] && rsync -avz "$LOCAL_DIR/data/report.html" "$REMOTE:$REMOTE_DIR/data/"
+[ -f "$LOCAL_DIR/data/rotation_index.json" ] && rsync -avz "$LOCAL_DIR/data/rotation_index.json" "$REMOTE:$REMOTE_DIR/data/"
 
 echo "=== Setting up venv + deps ==="
 ssh $REMOTE "cd $REMOTE_DIR && python3 -m venv venv && venv/bin/pip install -q requests"

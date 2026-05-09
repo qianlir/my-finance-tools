@@ -1,0 +1,246 @@
+/* ============================================================
+   千里 Qianli — Colors & Type
+   Import this file into any HTML that should render "on-brand".
+   Pair with the Google Fonts <link> declared in <head>:
+
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;700;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+   ============================================================ */
+
+:root {
+  /* ---------- Color anchors ---------- */
+  --ink:        #1A1613;   /* near-black, warmed toward brown (sumi 墨) */
+  --paper:      #F5EFE4;   /* warm off-white (xuan 宣纸, aged) */
+  --seal:       #A8342A;   /* muted cinnabar (印章 red) */
+
+  /* ---------- Warm neutrals (mixed from ink toward paper) ---------- */
+  --ink-05:     rgba(26, 22, 19, 0.05);
+  --ink-10:     rgba(26, 22, 19, 0.10);
+  --ink-20:     rgba(26, 22, 19, 0.20);
+  --ink-40:     rgba(26, 22, 19, 0.40);
+  --ink-60:     rgba(26, 22, 19, 0.60);
+  --ink-80:     rgba(26, 22, 19, 0.80);
+  --ink-90:     rgba(26, 22, 19, 0.90);
+
+  --paper-warm: #EDE5D6;   /* one step darker than paper, for subtle fills */
+  --paper-cool: #FAF6EE;   /* one step lighter — codeblock bg, input bg */
+
+  --seal-dark:  #7E2620;   /* hover/press on seal */
+  --seal-ghost: rgba(168, 52, 42, 0.12);
+
+  /* ---------- Semantic foreground ---------- */
+  --fg-1:       var(--ink);
+  --fg-2:       var(--ink-80);
+  --fg-3:       var(--ink-60);
+  --fg-muted:   var(--ink-40);
+  --fg-accent:  var(--seal);
+
+  /* ---------- Semantic background ---------- */
+  --bg-1:       var(--paper);
+  --bg-2:       var(--paper-warm);
+  --bg-3:       var(--paper-cool);
+  --bg-inverse: var(--ink);
+  --fg-inverse: var(--paper);
+
+  /* ---------- Borders ---------- */
+  --border-hairline: 1px solid var(--ink-20);
+  --border-strong:   1px solid var(--ink);
+
+  /* ---------- Type families ---------- */
+  --font-display-cjk:  "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-display-latin:"Spectral", "Iowan Old Style", "Times New Roman", serif;
+  --font-body:         "Spectral", "Noto Serif SC", "Iowan Old Style", "Songti SC", serif;
+  --font-ui:           "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono:         "JetBrains Mono", "SF Mono", "Menlo", monospace;
+
+  /* ---------- Type scale (editorial; 1.250 minor third) ---------- */
+  --fs-12: 0.75rem;     /* 12px — captions, kbd */
+  --fs-14: 0.875rem;    /* 14px — small UI */
+  --fs-16: 1rem;        /* 16px — UI base */
+  --fs-18: 1.125rem;    /* 18px — body (essays) */
+  --fs-20: 1.25rem;     /* 20px — lede */
+  --fs-24: 1.5rem;      /* 24px — h4 */
+  --fs-30: 1.875rem;    /* 30px — h3 */
+  --fs-36: 2.25rem;     /* 36px — h2 */
+  --fs-48: 3rem;        /* 48px — h1 */
+  --fs-64: 4rem;        /* 64px — display */
+  --fs-96: 6rem;        /* 96px — hero display */
+
+  /* ---------- Line heights ---------- */
+  --lh-tight:   1.1;
+  --lh-display: 1.15;
+  --lh-heading: 1.25;
+  --lh-body:    1.65;
+  --lh-prose:   1.75;   /* essays */
+
+  /* ---------- Letter spacing ---------- */
+  --ls-tight:     -0.02em;
+  --ls-normal:    0;
+  --ls-ui:        0.01em;
+  --ls-caps:      0.08em;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --sp-1:   4px;
+  --sp-2:   8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-24: 96px;
+  --sp-36: 144px;
+  --sp-54: 216px;   /* long-form section break */
+
+  /* ---------- Radii ---------- */
+  --r-0:    0;
+  --r-1:    2px;
+  --r-full: 999px;
+
+  /* ---------- Measure (reading widths) ---------- */
+  --measure-essay:     680px;
+  --measure-marketing: 1040px;
+
+  /* ---------- Motion ---------- */
+  --ease-gentle: cubic-bezier(.2, .6, .2, 1);
+  --dur-fast:    120ms;
+  --dur-base:    240ms;
+  --dur-slow:    400ms;
+
+  /* ---------- Shadow (the one and only) ---------- */
+  --shadow-print: 0 1px 0 rgba(26, 22, 19, 0.04);
+}
+
+/* ============================================================
+   Element defaults — opt-in via class="qianli" on the root
+   so this file doesn't trample unrelated pages.
+   ============================================================ */
+
+.qianli {
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-18);
+  line-height: var(--lh-body);
+  font-feature-settings: "kern", "liga", "onum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.qianli ::selection { background: var(--seal-ghost); color: var(--ink); }
+
+/* Display + headings */
+.qianli h1, .qianli .h1 {
+  font-family: var(--font-display-latin);
+  font-weight: 500;
+  font-size: var(--fs-48);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-tight);
+  margin: 0 0 var(--sp-6);
+}
+.qianli h2, .qianli .h2 {
+  font-family: var(--font-display-latin);
+  font-weight: 500;
+  font-size: var(--fs-36);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-tight);
+  margin: var(--sp-12) 0 var(--sp-4);
+}
+.qianli h3, .qianli .h3 {
+  font-family: var(--font-display-latin);
+  font-weight: 500;
+  font-size: var(--fs-24);
+  line-height: var(--lh-heading);
+  margin: var(--sp-8) 0 var(--sp-3);
+}
+.qianli h4, .qianli .h4 {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--fs-14);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--fg-3);
+  margin: var(--sp-6) 0 var(--sp-2);
+}
+
+/* Display mark — the 千里 logotype at display scale */
+.qianli .display-cjk {
+  font-family: var(--font-display-cjk);
+  font-weight: 700;
+  font-size: var(--fs-96);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+/* Prose */
+.qianli p, .qianli .p {
+  font-size: var(--fs-18);
+  line-height: var(--lh-prose);
+  margin: 0 0 var(--sp-4);
+  text-wrap: pretty;
+}
+.qianli .lede {
+  font-size: var(--fs-24);
+  line-height: 1.5;
+  color: var(--fg-2);
+  font-style: italic;
+  font-weight: 300;
+}
+
+/* Inline */
+.qianli a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--ink-20);
+  transition: border-color var(--dur-fast) var(--ease-gentle);
+}
+.qianli a:hover { border-bottom-color: var(--seal); border-bottom-width: 2px; margin-bottom: -1px; }
+
+.qianli em  { font-style: italic; }
+.qianli strong { font-weight: 600; }
+.qianli code, .qianli kbd, .qianli pre {
+  font-family: var(--font-mono);
+  font-size: 0.925em;
+}
+.qianli code { background: var(--paper-cool); padding: 1px 4px; border-radius: var(--r-1); }
+.qianli pre {
+  background: var(--paper-cool);
+  border: var(--border-hairline);
+  padding: var(--sp-4);
+  overflow-x: auto;
+  font-size: var(--fs-14);
+  line-height: 1.6;
+}
+.qianli kbd {
+  background: var(--bg-1);
+  border: var(--border-hairline);
+  padding: 1px 6px;
+  border-radius: var(--r-1);
+  font-size: var(--fs-12);
+}
+
+/* Small UI text */
+.qianli .ui        { font-family: var(--font-ui); font-size: var(--fs-14); letter-spacing: var(--ls-ui); }
+.qianli .caption   { font-family: var(--font-ui); font-size: var(--fs-12); color: var(--fg-3); letter-spacing: var(--ls-ui); }
+.qianli .eyebrow   { font-family: var(--font-ui); font-size: var(--fs-12); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--fg-3); }
+
+/* Blockquote */
+.qianli blockquote {
+  font-family: var(--font-display-latin);
+  font-style: italic;
+  font-size: var(--fs-24);
+  line-height: 1.5;
+  color: var(--fg-2);
+  border-left: 2px solid var(--seal);
+  padding-left: var(--sp-4);
+  margin: var(--sp-8) 0;
+}
+
+/* Horizontal rule */
+.qianli hr {
+  border: 0;
+  border-top: 1px solid var(--ink-20);
+  margin: var(--sp-12) 0;
+}

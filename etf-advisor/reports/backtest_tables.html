@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纳指ETF溢价轮动策略</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif; background: #fff; color: #1a1613; padding: 40px; }
+  .container { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  h2 { font-size: 16px; font-weight: 700; margin: 32px 0 10px; }
+  .period { font-size: 13px; color: #888; margin-bottom: 28px; }
+  .pool { font-size: 13px; color: #555; margin-bottom: 12px; line-height: 1.8; }
+  .pool b { color: #1a1613; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+  th { background: #f5f0e8; padding: 9px 14px; text-align: right; font-weight: 600; font-size: 12px; color: #666; border-bottom: 2px solid #e0d8c8; }
+  th:first-child { text-align: left; }
+  td { padding: 8px 14px; text-align: right; border-bottom: 1px solid #f0ebe0; }
+  td:first-child { text-align: left; }
+  tr.highlight { background: #fffbf0; font-weight: 600; }
+  tr.highlight td { border-bottom: 2px solid #e0d8c8; }
+  .red { color: #a8342a; }
+  .green { color: #2a6b4f; }
+  .muted { color: #999; font-size: 12px; }
+  .note { font-size: 12px; color: #999; margin-top: 6px; line-height: 1.6; }
+  .divider { border: 0; border-top: 1px solid #eee; margin: 28px 0; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+  .tag.best { background: #fff3e0; color: #e65100; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>纳指ETF溢价轮动策略回测</h1>
+  <div class="period">回测期间：2025-05-08 ~ 2026-05-07（242个交易日）<br>策略：全仓持有溢价最低的ETF，当持有ETF溢价比最低ETF高出阈值时切换</div>
+
+  <h2>表一：两只ETF轮动（159660 / 513390）</h2>
+  <div class="pool"><b>159660</b>（汇添富纳指ETF）买入持有 <span class="red">+37.89%</span>　　<b>513390</b>（博时纳指ETF）买入持有 <span class="red">+42.15%</span>　　<br>等权平均 <b>+40.02%</b></div>
+  <table>
+    <thead><tr><th>阈值</th><th>收益</th><th>超额收益</th><th>切换次数</th><th>最大回撤</th></tr></thead>
+    <tbody><tr><td>0.0</td><td class="red">+45.35%</td><td class="green">+5.33%</td><td>21</td><td>-16.06%</td></tr><tr><td>0.5</td><td class="red">+42.56%</td><td class="green">+2.54%</td><td>3</td><td>-17.74%</td></tr><tr><td>1.0</td><td class="red">+48.57%</td><td class="green">+8.55%</td><td>3</td><td>-17.74%</td></tr><tr><td>1.5</td><td class="red">+51.15%</td><td class="green">+11.13%</td><td>3</td><td>-17.74%</td></tr><tr><td>2.0</td><td class="red">+51.15%</td><td class="green">+11.13%</td><td>3</td><td>-17.74%</td></tr><tr><td>2.5</td><td class="red">+52.10%</td><td class="green">+12.08%</td><td>2</td><td>-17.74%</td></tr><tr class="highlight"><td>3.0 <span class="tag best">最优</span></td><td class="red">+53.29%</td><td class="green">+13.27%</td><td>2</td><td>-17.74%</td></tr>
+    </tbody>
+  </table>
+  <div class="note">阈值=3.0：仅操作2次即获得 +13.27% 超额收益</div>
+
+  <hr class="divider">
+
+  <h2>表二：五只ETF轮动（高波动池）</h2>
+  <div class="pool"><b>513100</b>（国泰纳指）+38.32%　　<b>159941</b>（广发纳指）+37.35%　　<b>159660</b>（汇添富纳）+37.89%　　<b>159501</b>（嘉实纳指）+39.17%　　<b>513390</b>（博时纳指）+42.15%　　<br>等权平均 <b>+38.97%</b></div>
+  <table>
+    <thead><tr><th>阈值</th><th>收益</th><th>超额收益</th><th>切换次数</th><th>最大回撤</th></tr></thead>
+    <tbody><tr><td>0.0</td><td class="red">+53.37%</td><td class="green">+14.40%</td><td>77</td><td>-12.92%</td></tr><tr><td>0.5</td><td class="red">+48.02%</td><td class="green">+9.04%</td><td>8</td><td>-14.02%</td></tr><tr><td>1.0</td><td class="red">+47.78%</td><td class="green">+8.81%</td><td>5</td><td>-14.47%</td></tr><tr class="highlight"><td>1.5 <span class="tag best">最优</span></td><td class="red">+53.52%</td><td class="green">+14.55%</td><td>5</td><td>-13.58%</td></tr><tr><td>2.0</td><td class="red">+45.97%</td><td class="green">+7.00%</td><td>2</td><td>-15.01%</td></tr><tr><td>2.5</td><td class="red">+49.87%</td><td class="green">+10.89%</td><td>2</td><td>-15.01%</td></tr><tr><td>3.0</td><td class="red">+44.66%</td><td class="green">+5.68%</td><td>1</td><td>-15.01%</td></tr>
+    </tbody>
+  </table>
+  <div class="note">阈值=1.5：5次操作即获得 +14.55% 超额收益，回撤最小（-13.58%）</div>
+
+</div>
+</body>
+</html>

@@ -51,6 +51,11 @@ def run_update():
             cwd=str(PROJECT_ROOT), timeout=60, check=True,
             capture_output=True
         )
+        subprocess.run(
+            [python_cmd, str(SCRIPT_DIR / "calc_rotation_index.py"), "--threshold", "1"],
+            cwd=str(PROJECT_ROOT), timeout=120, check=True,
+            capture_output=True
+        )
         print(f"[{ts}] Update OK", flush=True)
     except Exception as e:
         print(f"[{ts}] Update FAILED: {e}", flush=True)
@@ -67,11 +72,11 @@ def main():
     if args.once:
         return
 
-    print(f"Daemon mode: interval={args.interval}s, market hours only", flush=True)
+    print(f"Daemon mode: market={args.interval}s, idle=600s", flush=True)
     while True:
-        time.sleep(args.interval)
-        if is_market_hours():
-            run_update()
+        interval = args.interval if is_market_hours() else 600
+        time.sleep(interval)
+        run_update()
 
 
 if __name__ == "__main__":

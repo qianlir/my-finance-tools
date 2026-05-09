@@ -29,6 +29,10 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR / ".."
 DB_PATH = str(PROJECT_ROOT / "data" / "etf_premium.db")
 
+# 推荐池配置
+_pool_path = PROJECT_ROOT / "memory" / "knowledge" / "etf" / "rotation-pool.json"
+ROTATION_POOL = json.loads(_pool_path.read_text()) if _pool_path.exists() else {}
+
 # 指数类型映射：期货代码、字段名、显示名
 INDEX_CONFIG = {
     'NASDAQ': {
@@ -638,11 +642,18 @@ def get_futures_change_detail(index_type: str, days: int) -> List[Tuple[str, flo
 
 
 # ============= 价格比值法 =============
+def _is_nikkei_market_hours():
+    """日经开盘时间：北京时间 8:00-14:00"""
+    h = datetime.now().hour
+    return 8 <= h < 14
+
+
 def get_nav_date_futures_close(nav_date: str, index_type: str) -> float:
     """获取净值日对应的期货/指数收盘价
 
-    美股ETF: nav_date = 美股收盘日，查期货 prev_close
-    日经ETF: nav_date = 中国日期（可能是日本假日），查 ≤ nav_date 最近有数据的日经指数收盘
+    美股ETF: 查期货 prev_close
+    日经ETF: 开盘时用指数，非开盘时用NK期货
+    DAX ETF: 用DAX指数
 
     返回: 收盘价 或 0
     """
@@ -650,6 +661,8 @@ def get_nav_date_futures_close(nav_date: str, index_type: str) -> float:
         return 0
 
     cfg = INDEX_CONFIG.get(index_type, {})
+
+    # 日经/DAX：分母始终用指数收盘（净值基准不变）
     if cfg.get('use_index'):
         return _get_index_nav_date_close(nav_date, cfg['close_col'])
 
@@ -709,14 +722,18 @@ def _get_us_nav_date_close(nav_date: str, index_type: str) -> float:
 
 
 def get_current_futures_price(index_type: str) -> float:
-    """获取最新期货价格（实时盘中价）"""
+    """获取最新期货/指数价格"""
     if index_type not in INDEX_CONFIG:
         return 0
 
+    # 日经：开盘时用指数，非开盘时用期货
+    if index_type == 'NIKKEI':
+        close_col = 'nk_idx_close' if _is_nikkei_market_hours() else 'nk_close'
+    else:
+        close_col = INDEX_CONFIG[index_type]['close_col']
+
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    close_col = INDEX_CONFIG[index_type]['close_col']
     cursor.execute(f"SELECT {close_col} FROM futures_data WHERE {close_col} IS NOT NULL ORDER BY date DESC LIMIT 1")
     row = cursor.fetchone()
     conn.close()
@@ -903,12 +920,18 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             r['excess_by_period'].get(p, 0) * w for p, w in WEIGHTS.items()
         )
 
-        # 分值 = 净值涨幅×10% + (-综合超额)×80% + (-当前估算溢价)×10%
+        # 分值 = 净值涨幅×10% + (-综合超额)×80% + (-当前估算溢价)×10% + 推荐池加分
         r['score'] = (
             r['nav_return_1y'] * 0.10
             + (-r['composite']) * 0.80
             + (-r['display_premium']) * 0.10
         )
+        pool_cfg = ROTATION_POOL.get(index_type, {})
+        pool = pool_cfg.get('pool', {})
+        etf_pool_cfg = pool.get(r['code'])
+        r['rotation_pool'] = etf_pool_cfg is not None
+        r['rotation_bonus'] = etf_pool_cfg['bonus'] if etf_pool_cfg else pool_cfg.get('default_bonus', 0)
+        r['score'] += r['rotation_bonus']
 
     # === 推荐等级（基于综合超额）===
     # 按分值降序排序（分值越高=越推荐）
@@ -1000,19 +1023,17 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
         has_correction = futures_ratio and abs(futures_ratio - 1) > 0.0001
         prem_col = "估算溢价" if has_correction else "当前溢价"
 
-        correction = None
-        if has_correction:
-            symbol = cfg.get('symbol', 'NQ')
-            nav_date_close = ft_info.get('nav_date_close', 0)
-            current_futures_price = ft_info.get('current_futures_price', 0)
-            correction = {
-                "symbol": symbol,
-                "method": "price_ratio",
-                "nav_date_close": nav_date_close,
-                "current_futures_price": current_futures_price,
-                "ratio": round(futures_ratio, 6),
-                "ratio_pct": round((futures_ratio - 1) * 100, 2)
-            }
+        symbol = cfg.get('symbol', 'NQ')
+        nav_date_close = ft_info.get('nav_date_close', 0)
+        current_futures_price = ft_info.get('current_futures_price', 0)
+        correction = {
+            "symbol": symbol,
+            "method": "price_ratio",
+            "nav_date_close": nav_date_close,
+            "current_futures_price": current_futures_price,
+            "ratio": round(futures_ratio, 6) if futures_ratio else 1.0,
+            "ratio_pct": round((futures_ratio - 1) * 100, 2) if futures_ratio else 0.0
+        } if nav_date_close and current_futures_price else None
 
         etfs = []
         for r in results:
@@ -1037,12 +1058,18 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "days_gt7": r['1Y_gt7'],
                 "score": round(r['score'], 2),
                 "recommendation": rec_text,
-                "stars": stars
+                "stars": stars,
+                "rotation_pool": r.get('rotation_pool', False),
+                "rotation_bonus": r.get('rotation_bonus', 0)
             })
+
+        # 净值日期（取第一个ETF的nav_date）
+        nav_date = results[0].get('nav_date') if results else None
 
         return {
             "index_type": index_type,
             "index_name": index_name,
+            "nav_date": nav_date,
             "premium_col_name": prem_col,
             "futures_correction": correction,
             "futures_cumulative": round((futures_ratio - 1) * 100, 2) if futures_ratio else None,
@@ -1069,7 +1096,6 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
         "futures": _format_futures_json(futures),
         "sections": sections,
         "formula_notes": [
-            "纳指科技ETF(159509)未纳入统计（历史溢价过高）",
             "格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）",
             "综合超额 = 1M×35% + 3M×25% + 6M×20% + 1Y×10% + ALL×10%",
             "分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%"
@@ -1839,7 +1865,6 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
         lines.append(generate_md_table('NIKKEI', nikkei_results, nikkei_insufficient, nk_ft))
 
     # 公式说明（合并，仅出现一次）
-    lines.append(f"> 纳指科技ETF(159509)未纳入统计（历史溢价过高）")
     lines.append(f"> 格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）")
     lines.append(f"> 综合超额 = 1M×35% + 3M×25% + 6M×20% + 1Y×10% + ALL×10%")
     lines.append(f"> 分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%")
@@ -2074,7 +2099,6 @@ def main():
             idx_results = all_results.get(idx_type, [])
             if idx_results:
                 lines.append(generate_md_table(idx_type, idx_results, all_insufficient.get(idx_type, []), all_ft_info.get(idx_type)))
-        lines.append(f"> 纳指科技ETF(159509)未纳入统计（历史溢价过高）")
         lines.append(f"> 分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%")
         html_content = md_to_html("\n".join(lines), today, gen_time)
         # 注入刷新栏 + 变化箭头脚本
@@ -2169,7 +2193,6 @@ td.changed{transition:background .5s;background:#fff9c4 !important;}
     print_actionable_summary(all_results, args.holding)
 
     # 注意事项
-    print("注意: 纳指科技ETF(159509)未纳入统计（历史溢价过高）")
 
     # 保存MD报告
     nasdaq_results = all_results.get('NASDAQ', [])

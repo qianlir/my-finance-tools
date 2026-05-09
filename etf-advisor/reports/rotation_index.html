@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纳指ETF轮动指数 — 千里知投</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Helvetica Neue', 'Noto Sans SC', sans-serif; background: #f8f6f1; color: #1a1613; }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  .top-nav { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; font-size: 13px; }
+  .top-nav a { color: #888; text-decoration: none; border-bottom: 1px solid transparent; }
+  .top-nav a:hover { color: #1a1613; border-bottom-color: #1a1613; }
+  .top-nav .active { color: #1a1613; font-weight: 600; border-bottom: 1px solid #1a1613; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 24px; }
+  .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+  .metric { background: #fff; border-radius: 10px; padding: 14px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .metric .label { font-size: 11px; color: #999; margin-bottom: 4px; }
+  .metric .value { font-size: 20px; font-weight: 700; }
+  .chart-wrap { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); position: relative; }
+  .chart-title { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 12px; }
+  .legend { display: flex; gap: 20px; font-size: 12px; color: #666; margin-top: 8px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .line-rot { width: 20px; height: 2.5px; background: #a8342a; border-radius: 2px; }
+  .legend .line-eq { width: 20px; height: 0; border-top: 2px dashed #8b6914; }
+  h2 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th { background: #f5efe4; padding: 10px 10px; text-align: right; font-weight: 600; font-size: 11px; color: #666; white-space: nowrap; }
+  th:nth-child(1), th:nth-child(2), th:nth-child(3) { text-align: left; }
+  td { padding: 9px 10px; border-top: 1px solid #f0ebe0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td:nth-child(1), td:nth-child(2), td:nth-child(3) { text-align: left; }
+  tr:hover { background: #faf8f4; }
+  tr.row-init { background: #faf8f4; }
+  .green { color: #2a6b4f; }
+  .red { color: #a8342a; }
+  .note { font-size: 12px; color: #999; margin-top: 20px; line-height: 1.8; padding: 16px; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .note strong { color: #666; }
+  .loading { text-align: center; padding: 60px; color: #999; font-size: 14px; }
+
+  @media (max-width: 600px) {
+    .container { padding: 16px 12px; }
+    h1 { font-size: 18px; }
+    .metrics { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .metric { padding: 10px 12px; }
+    .metric .value { font-size: 17px; }
+    .chart-wrap { padding: 14px; }
+    table { font-size: 12px; }
+    th, td { padding: 7px 6px; }
+    .note { font-size: 11px; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="app"><div class="loading">加载数据中...</div></div>
+</div>
+
+<script>
+const POOL_ICON = '🔄';
+
+async function loadData() {
+  const urls = ['/data/rotation_index.json', '../data/rotation_index.json', 'data/rotation_index.json'];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url + '?t=' + Date.now());
+      if (r.ok) return await r.json();
+    } catch(e) {}
+  }
+  return null;
+}
+
+function fmtMoney(v) {
+  if (v == null) return '—';
+  return '¥' + v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function fmtPct(v) {
+  if (v == null) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+function fmtScore(v) {
+  if (v == null) return '—';
+  return v.toFixed(2);
+}
+
+function render(data) {
+  const app = document.getElementById('app');
+  const s = data.summary;
+  const pool = new Set(data.pool);
+  const poolNames = data.pool_names || {};
+
+  function etfLabel(code) {
+    if (!code) return '—';
+    const name = poolNames[code] || code;
+    const short = name.replace(/ETF$/, '').replace(/纳指/, '');
+    return (pool.has(code) ? short + ' ◆' : short) + ' ' + code;
+  }
+
+  app.innerHTML = `
+    <div class="top-nav">
+      <a href="/">总览</a>
+      <a href="/premium">溢价分析</a>
+      <a class="active" href="/reports/rotation_index.html">轮动指数</a>
+    </div>
+
+    <h1>纳指ETF轮动指数</h1>
+    <div class="subtitle">${data.start_date} ~ ${data.end_date} · ${data.trading_days}交易日 · 当前持有: ${s.current_holding_name} · 更新: ${data.generated_at}</div>
+
+    <div class="metrics">
+      <div class="metric"><div class="label">轮动市值</div><div class="value red">${fmtMoney(s.rotation_value)}</div></div>
+      <div class="metric"><div class="label">轮动收益</div><div class="value red">${fmtPct(s.rotation_return)}</div></div>
+      <div class="metric"><div class="label">等权市值</div><div class="value">${fmtMoney(s.equal_weight_value)}</div></div>
+      <div class="metric"><div class="label">等权收益 (${data.equal_weight_etfs}只)</div><div class="value">${fmtPct(s.equal_weight_return)}</div></div>
+      <div class="metric"><div class="label">Alpha</div><div class="value green">${fmtPct(s.alpha)}</div></div>
+      <div class="metric"><div class="label">切换次数</div><div class="value">${s.trade_count}</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-title">市值走势 · 起始 ¥${data.initial_value.toLocaleString()}</div>
+      <div style="height:400px;"><canvas id="chart"></canvas></div>
+      <div class="legend">
+        <span><span class="line-rot"></span>轮动策略</span>
+        <span><span class="line-eq"></span>等权持有 (${data.equal_weight_etfs}只)</span>
+      </div>
+    </div>
+
+    <h2>换仓记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>日期</th><th>操作</th>
+          <th>卖出</th><th>卖出溢价</th><th>卖出分值</th>
+          <th>买入</th><th>买入溢价</th><th>买入分值</th>
+          <th>分差</th><th>策略市值</th><th>等权市值</th><th>领先</th>
+        </tr></thead>
+        <tbody id="trade-body"></tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <strong>切换规则</strong>: 每日计算池内ETF综合评分，最优分值 − 持仓分值 ≥ ${data.threshold} 时切换，仅交易日执行<br>
+      <strong>推荐池</strong>: ${data.pool.map(c => (poolNames[c] || c) + ' (' + c + ')').join(' / ')}<br>
+      <strong>等权基准</strong>: ${data.equal_weight_etfs}只纳指ETF各投 ¥${Math.round(data.initial_value / data.equal_weight_etfs)}，买入后持有不动
+    </div>
+  `;
+
+  const tbody = document.getElementById('trade-body');
+  data.trades.forEach(t => {
+    const isInit = t.action === '建仓';
+    const leadColor = (t.lead || 0) > 0 ? 'green' : (t.lead || 0) < 0 ? 'red' : '';
+    tbody.innerHTML += `<tr class="${isInit ? 'row-init' : ''}">
+      <td>${t.seq}</td>
+      <td>${t.date}</td>
+      <td>${t.action}</td>
+      <td>${t.sell_name ? etfLabel(t.sell_code) : '—'}</td>
+      <td>${t.sell_premium != null ? t.sell_premium.toFixed(2) + '%' : '—'}</td>
+      <td>${fmtScore(t.sell_score)}</td>
+      <td>${etfLabel(t.buy_code)}</td>
+      <td>${t.buy_premium != null ? t.buy_premium.toFixed(2) + '%' : '—'}</td>
+      <td>${fmtScore(t.buy_score)}</td>
+      <td>${t.score_diff != null ? (t.score_diff > 0 ? '+' : '') + t.score_diff.toFixed(2) : '—'}</td>
+      <td>${fmtMoney(t.rotation_value)}</td>
+      <td>${fmtMoney(t.equal_weight_value)}</td>
+      <td class="${leadColor}">${t.lead != null ? (t.lead > 0 ? '+' : '') + fmtMoney(t.lead) : '—'}</td>
+    </tr>`;
+  });
+
+  renderChart(data);
+}
+
+function renderChart(data) {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const d = data.daily;
+  const labels = d.dates.map(s => s.slice(5));
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: '轮动策略',
+          data: d.rotation_values,
+          borderColor: '#a8342a',
+          backgroundColor: 'rgba(168,52,42,0.06)',
+          borderWidth: 2.5,
+          fill: true,
+          pointRadius: 0,
+          pointHitRadius: 8,
+          tension: 0.1,
+        },
+        {
+          label: '等权持有',
+          data: d.equal_weight_values,
+          borderColor: '#8b6914',
+          borderWidth: 1.5,
+          borderDash: [6, 3],
+          fill: false,
+          pointRadius: 0,
+          pointHitRadius: 8,
+          tension: 0.1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(26,22,19,0.92)',
+          titleFont: { size: 12 },
+          bodyFont: { size: 12, family: '-apple-system, sans-serif' },
+          padding: 10,
+          callbacks: {
+            title: function(items) {
+              const idx = items[0].dataIndex;
+              return d.dates[idx] + ' · 持有: ' + (data.pool_names[d.holdings[idx]] || d.holdings[idx]);
+            },
+            label: function(item) {
+              const val = item.raw;
+              const ret = ((val / data.initial_value - 1) * 100).toFixed(2);
+              const prefix = item.datasetIndex === 0 ? '轮动' : '等权';
+              return prefix + ': ¥' + val.toLocaleString() + ' (' + (ret > 0 ? '+' : '') + ret + '%)';
+            },
+            afterBody: function(items) {
+              const idx = items[0].dataIndex;
+              const rv = d.rotation_values[idx];
+              const ev = d.equal_weight_values[idx];
+              const lead = rv - ev;
+              return '领先: ' + (lead > 0 ? '+' : '') + '¥' + Math.round(lead).toLocaleString();
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 10, font: { size: 11 }, color: '#999' },
+          grid: { display: false }
+        },
+        y: {
+          ticks: {
+            font: { size: 11 }, color: '#999',
+            callback: v => '¥' + (v / 1000).toFixed(0) + 'k'
+          },
+          grid: { color: 'rgba(0,0,0,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+loadData().then(data => {
+  if (data) {
+    render(data);
+  } else {
+    document.getElementById('app').innerHTML = '<div class="loading" style="color:#a8342a;">无法加载数据。请确认 data/rotation_index.json 存在。</div>';
+  }
+});
+</script>
+</body>
+</html>

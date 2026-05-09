@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="qianli">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千里知投 — ETF 溢价分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;700;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/colors_and_type.css">
+
+<script src="/vendor/react.min.js"></script>
+<script src="/vendor/react-dom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--paper); }
+  *, *::before, *::after { box-sizing: border-box; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* View switcher */
+  .vs { position: fixed; top: 10px; right: 12px; z-index: 100; display: flex; border: 1px solid var(--ink-20); border-radius: 2px; overflow: hidden; }
+  .vs button { font-family: var(--font-ui); font-size: 11px; font-weight: 500; padding: 5px 14px; border: none; cursor: pointer; background: var(--paper); color: var(--fg-3); transition: all 120ms; }
+  .vs button.on { background: var(--ink); color: var(--paper); }
+
+  /* Mobile shell */
+  .mob { width: 390px; min-height: 100vh; margin: 0 auto; background: var(--paper); }
+  @media (max-width: 768px) { .mob { width: 100%; } }
+
+  /* Footer */
+  .ft { border-top: 1px solid var(--ink-20); padding: 24px 32px; font-family: var(--font-ui); font-size: 10px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--ink-20); border-radius: 2px; }
+
+  /* Selection */
+  ::selection { background: rgba(168,52,42,0.12); }
+</style>
+</head>
+<body class="qianli">
+<div id="root"><p style="padding:20px;font-family:monospace">Loading...</p></div>
+
+<script>window.onerror=function(m,s,l){document.getElementById('root').innerHTML='<pre style="padding:20px;color:red">'+m+'\n'+s+':'+l+'</pre>';}</script>
+<script src="/data.js"></script>
+<script src="/rotation.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

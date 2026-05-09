@@ -24,3 +24,5 @@ etf-advisor/scripts/wechat-publisher/
 # 小程序
 etf-miniprogram/project.private.config.json
 *.zip
+etf-advisor/web/vendor/babel.min.js
+etf-advisor/web/data
