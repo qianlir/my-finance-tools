@@ -1045,6 +1045,10 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             + (-r['composite']) * 0.80
             + (-r['display_premium']) * 0.10
         )
+
+        # 板块历史溢价特征加分：1Y均溢价 × 10%，反映该板块过去的溢价水平
+        avg_1y_premium = r['avg_by_period'].get('1Y', 0)
+        r['score'] += avg_1y_premium * 0.10
         pool_cfg = ROTATION_POOL.get(index_type, {})
         pool = pool_cfg.get('pool', {})
         etf_pool_cfg = pool.get(r['code'])
@@ -1243,7 +1247,8 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
         "formula_notes": [
             "格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）",
             "综合超额 = 1M×35% + 3M×25% + 6M×20% + 1Y×10% + ALL×10%",
-            "分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%"
+            "分值 = 溢价偏离历史溢价均值 + 同类跟踪质量差异 + 板块历史溢价水平",
+            "分值越高，当前溢价越低于历史水平。仅反映溢价位置，不预测板块涨跌。"
         ]
     }
 
@@ -1402,7 +1407,7 @@ def print_results(index_type: str, results: List[Dict], insufficient_data: List[
             ft_name = cfg['symbol']
             print(f"> {ft_name}期货修正: {current_futures_price:.0f} / {nav_date_close:.0f} = {ratio_pct:+.2f}%")
 
-    print(f"\n  按分值排序（越高=越推荐）  分值 = 1Y净值×10% + (-超额)×80% + (-溢价)×10%")
+    print(f"\n  按分值排序（越高=越推荐）  分值 = 溢价偏离历史均值 + 同类跟踪质量 + 板块溢价特征")
     print()
 
 
@@ -2022,7 +2027,8 @@ def save_md_report(nasdaq_results: List[Dict], sp500_results: List[Dict], dow_re
     # 公式说明（合并，仅出现一次）
     lines.append(f"> 格式: 超额溢价(历史均值)  按分值排序（越高=越推荐）")
     lines.append(f"> 综合超额 = 1M×35% + 3M×25% + 6M×20% + 1Y×10% + ALL×10%")
-    lines.append(f"> 分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%")
+    lines.append(f"> 分值 = 溢价偏离历史溢价均值 + 同类跟踪质量差异 + 板块历史溢价水平")
+    lines.append(f"> 分值越高，当前溢价越低于历史水平。仅反映溢价位置，不预测板块涨跌。")
 
     # LLM 评估已移至独立 skill（etf-evaluator），生成 {timestamp}_llm.md 文件
     # 使用 "LLM评估" 或 "评估ETF报告" 触发 etf-evaluator skill
@@ -2259,7 +2265,8 @@ def main():
             idx_results = all_results.get(idx_type, [])
             if idx_results:
                 lines.append(generate_md_table(idx_type, idx_results, all_insufficient.get(idx_type, []), all_ft_info.get(idx_type)))
-        lines.append(f"> 分值 = 1Y净值涨幅×10% + (-综合超额)×75% + (-估算溢价)×15%")
+        lines.append(f"> 分值 = 溢价偏离历史溢价均值 + 同类跟踪质量差异 + 板块历史溢价水平")
+        lines.append(f"> 分值越高，当前溢价越低于历史水平。仅反映溢价位置，不预测板块涨跌。")
         html_content = md_to_html("\n".join(lines), today, gen_time)
         # 注入刷新栏 + 变化箭头脚本
         inject = r'''<div id="rfbar" style="position:fixed;top:0;left:0;right:0;background:#1a73e8;color:#fff;padding:8px 16px;display:flex;align-items:center;gap:12px;z-index:999;font-size:14px;">
