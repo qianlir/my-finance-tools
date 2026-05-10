@@ -358,7 +358,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       </div>
 
       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 16, lineHeight: 1.6 }}>
-        分值综合考虑当前溢价与历史均值的偏离、实时溢价高低和近一年净值涨幅。溢价越低于历史均值、净值涨幅越大的ETF，分值越高，越值得关注。
+        分值 = 溢价偏离历史溢价均值 + 同类跟踪质量差异。分值越高，当前溢价越低于历史水平。仅反映溢价位置，不预测板块涨跌。
       </div>
     </div>
   );

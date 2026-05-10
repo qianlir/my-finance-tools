@@ -279,7 +279,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
       <div style={{ borderTop: '1px solid var(--ink-10)' }}></div>
       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 12, lineHeight: 1.6 }}>
         <div>点击展开详情 · 点击名称查看完整信息</div>
-        <div>分值综合考虑溢价偏离历史均值的程度和实时溢价高低，分值越高越值得关注</div>
+        <div>分值 = 溢价偏离历史溢价均值 + 同类跟踪质量差异。分值越高，当前溢价越低于历史水平。仅反映溢价位置，不预测板块涨跌。</div>
       </div>
     </div>
   );
