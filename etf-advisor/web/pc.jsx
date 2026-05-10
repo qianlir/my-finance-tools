@@ -157,9 +157,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
       ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
       ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
-      ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)],
-      ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)],
-      ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)],
+      ['3M均溢价', fmtPct(selFund.avg_3m), null],
+      ['6M均溢价', fmtPct(selFund.avg_6m), null],
+      ['1Y均溢价', fmtPct(selFund.avg_1y), null],
       ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)],
       ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)],
       ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)],
@@ -295,9 +295,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
               <th style={TH}>估算净值</th>
               <th style={TH}>涨幅</th>
               <th style={TH}>估算溢价</th>
-              <th style={TH}>3M超额(均值)</th>
-              <th style={TH}>6M超额(均值)</th>
-              <th style={TH}>1Y超额(均值)</th>
+              <th style={TH}>3M均溢价</th>
+              <th style={TH}>6M均溢价</th>
+              <th style={TH}>1Y均溢价</th>
               <th style={TH}>年净值涨幅</th>
               <th style={TH}>年价格涨幅</th>
               <th style={TH}>{'>'}7%天</th>
@@ -328,17 +328,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
                   </td>
                   <td style={{ ...TDM, color: chg(e.change) }}>{fmtPct(e.change)}</td>
                   <td style={{ ...TDM, color: chg(e.display_premium), fontWeight: 500 }}>{fmtPct(e.display_premium)}</td>
-                  <td style={TDM}>
-                    <span style={{ color: chg(e.excess_3m) }}>{fmtPct(e.excess_3m)}</span>
-                    <span style={{ color: 'var(--fg-muted)', fontSize: 10 }}>({fmtPct(e.avg_3m)})</span>
-                  </td>
-                  <td style={TDM}>
-                    <span style={{ color: chg(e.excess_6m) }}>{fmtPct(e.excess_6m)}</span>
-                    <span style={{ color: 'var(--fg-muted)', fontSize: 10 }}>({fmtPct(e.avg_6m)})</span>
-                  </td>
-                  <td style={TDM}>
-                    <span style={{ color: chg(e.excess_1y) }}>{fmtPct(e.excess_1y)}</span>
-                    <span style={{ color: 'var(--fg-muted)', fontSize: 10 }}>({fmtPct(e.avg_1y)})</span>
+                  <td style={TDM}>{fmtPct(e.avg_3m)}</td>
+                  <td style={TDM}>{fmtPct(e.avg_6m)}</td>
+                  <td style={TDM}>{fmtPct(e.avg_1y)}
                   </td>
                   <td style={{ ...TDM, fontSize: 11, color: chg(e.nav_return_1y) }}>{fmtPct(e.nav_return_1y)}</td>
                   <td style={{ ...TDM, fontSize: 11, color: chg(e.price_return_1y) }}>{fmtPct(e.price_return_1y)}</td>

@@ -1056,7 +1056,7 @@ function PCPremium({
     const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
     const estNav = selFund.nav * r;
     const holdings = selFund.holdings || [];
-    const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
     if (selFund.subscription_status) {
       const subMap = {
         closed: '暂停申购',
@@ -1370,11 +1370,11 @@ function PCPremium({
     style: TH
   }, "\u4F30\u7B97\u6EA2\u4EF7"), /*#__PURE__*/React.createElement("th", {
     style: TH
-  }, "3M\u8D85\u989D(\u5747\u503C)"), /*#__PURE__*/React.createElement("th", {
+  }, "3M\u5747\u6EA2\u4EF7"), /*#__PURE__*/React.createElement("th", {
     style: TH
-  }, "6M\u8D85\u989D(\u5747\u503C)"), /*#__PURE__*/React.createElement("th", {
+  }, "6M\u5747\u6EA2\u4EF7"), /*#__PURE__*/React.createElement("th", {
     style: TH
-  }, "1Y\u8D85\u989D(\u5747\u503C)"), /*#__PURE__*/React.createElement("th", {
+  }, "1Y\u5747\u6EA2\u4EF7"), /*#__PURE__*/React.createElement("th", {
     style: TH
   }, "\u5E74\u51C0\u503C\u6DA8\u5E45"), /*#__PURE__*/React.createElement("th", {
     style: TH
@@ -1453,38 +1453,11 @@ function PCPremium({
       }
     }, fmtPct(e.display_premium)), /*#__PURE__*/React.createElement("td", {
       style: TDM
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: chg(e.excess_3m)
-      }
-    }, fmtPct(e.excess_3m)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--fg-muted)',
-        fontSize: 10
-      }
-    }, "(", fmtPct(e.avg_3m), ")")), /*#__PURE__*/React.createElement("td", {
+    }, fmtPct(e.avg_3m)), /*#__PURE__*/React.createElement("td", {
       style: TDM
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: chg(e.excess_6m)
-      }
-    }, fmtPct(e.excess_6m)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--fg-muted)',
-        fontSize: 10
-      }
-    }, "(", fmtPct(e.avg_6m), ")")), /*#__PURE__*/React.createElement("td", {
+    }, fmtPct(e.avg_6m)), /*#__PURE__*/React.createElement("td", {
       style: TDM
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: chg(e.excess_1y)
-      }
-    }, fmtPct(e.excess_1y)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--fg-muted)',
-        fontSize: 10
-      }
-    }, "(", fmtPct(e.avg_1y), ")")), /*#__PURE__*/React.createElement("td", {
+    }, fmtPct(e.avg_1y)), /*#__PURE__*/React.createElement("td", {
       style: {
         ...TDM,
         fontSize: 11,
@@ -1839,7 +1812,7 @@ function MobPremium({
     const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
     const estNav = selFund.nav * r;
     const holdings = selFund.holdings || [];
-    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
     if (selFund.subscription_status) {
       var subMap = {
         closed: '暂停申购',
@@ -2183,7 +2156,7 @@ function MobPremium({
         background: 'var(--ink-05)',
         borderRadius: 2
       }
-    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(fc?.ratio_pct) + ')', chg(fc?.ratio_pct)], ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M超额(均值)', fmtPct(e.excess_3m) + ' (' + fmtPct(e.avg_3m) + ')', chg(e.excess_3m)], ['6M超额(均值)', fmtPct(e.excess_6m) + ' (' + fmtPct(e.avg_6m) + ')', chg(e.excess_6m)], ['1Y超额(均值)', fmtPct(e.excess_1y) + ' (' + fmtPct(e.avg_1y) + ')', chg(e.excess_1y)], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)], ['>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(fc?.ratio_pct) + ')', chg(fc?.ratio_pct)], ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M均溢价', fmtPct(e.avg_3m), null], ['6M均溢价', fmtPct(e.avg_6m), null], ['1Y均溢价', fmtPct(e.avg_1y), null], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)], ['>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
       key: l,
       style: {
         display: 'flex',
