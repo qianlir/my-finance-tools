@@ -1052,23 +1052,22 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
         r['rotation_bonus'] = etf_pool_cfg['bonus'] if etf_pool_cfg else pool_cfg.get('default_bonus', 0)
         r['score'] += r['rotation_bonus']
 
-    # === 推荐等级（基于综合超额）===
-    # 按分值降序排序（分值越高=越推荐）
+    # === 推荐等级（按 sub_category 分组归一化）===
     results.sort(key=lambda x: x['score'], reverse=True)
 
-    # 如果最高分 > 2.5，对正分值进行归一化处理
-    # 这样可以区分推荐等级，同时保持显示分值不变
-    max_score = results[0]['score'] if results else 0
-    score_adjustment = 0.0
-    if max_score > 2.5:
-        score_adjustment = max_score - 2.5
-
+    # 按 sub_category 分组，每组独立归一化
+    _rec_groups = {}
     for r in results:
-        # 计算推荐等级时使用调整后的分值
-        score_for_rec = r['score']
-        if score_adjustment > 0 and score_for_rec > 0:
-            score_for_rec = max(0, score_for_rec - score_adjustment)
-        r['recommendation'] = get_recommendation_level(score_for_rec)
+        _rec_groups.setdefault(r.get('_sub', r['code']), []).append(r)
+
+    for sub, group in _rec_groups.items():
+        max_score = group[0]['score'] if group else 0
+        adjustment = max(0, max_score - 2.5)
+        for r in group:
+            score_for_rec = r['score']
+            if adjustment > 0 and score_for_rec > 0:
+                score_for_rec = max(0, score_for_rec - adjustment)
+            r['recommendation'] = get_recommendation_level(score_for_rec)
 
     return results, insufficient_data, ft_info
 
