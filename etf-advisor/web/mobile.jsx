@@ -278,7 +278,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
       })}
       <div style={{ borderTop: '1px solid var(--ink-10)' }}></div>
       <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 12, lineHeight: 1.5 }}>
-        分值综合考虑溢价偏离历史均值的程度和实时溢价高低。同类基金中跟踪质量更好的会额外加分。分值越高越值得关注。
+        点击展开详情 · 点击名称查看完整信息{'\n'}分值综合考虑溢价偏离历史均值的程度和实时溢价高低，分值越高越值得关注
       </div>
     </div>
   );
