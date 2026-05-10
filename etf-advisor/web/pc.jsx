@@ -160,9 +160,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       ['3M均溢价', fmtPct(selFund.avg_3m), null],
       ['6M均溢价', fmtPct(selFund.avg_6m), null],
       ['1Y均溢价', fmtPct(selFund.avg_1y), null],
+      ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
       ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)],
       ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)],
-      ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
       ['分值', selFund.score.toFixed(2), null],
     ];
     if (selFund.subscription_status) {
