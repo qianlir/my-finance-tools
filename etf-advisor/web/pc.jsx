@@ -162,7 +162,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       ['1Y均溢价', fmtPct(selFund.avg_1y), null],
       ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)],
       ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)],
-      ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
+      ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
       ['分值', selFund.score.toFixed(2), null],
     ];
     if (selFund.subscription_status) {
@@ -299,7 +299,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
               <th style={TH}>1Y均溢价</th>
               <th style={TH}>年净值涨幅</th>
               <th style={TH}>年价格涨幅</th>
-              <th style={TH}>{'>'}7%天</th>
+              <th style={TH}>溢价{'>'}7%天</th>
               <th style={TH}>分值</th>
               <th style={TH}>推荐</th>
             </tr>
