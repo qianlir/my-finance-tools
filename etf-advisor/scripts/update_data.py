@@ -1125,6 +1125,7 @@ def init_database():
             estimate_method TEXT NOT NULL, estimate_symbol TEXT,
             enabled INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0,
             rotation_pool INTEGER DEFAULT 0, rotation_bonus REAL DEFAULT 0,
+            sub_category TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP)""",
         """CREATE TABLE IF NOT EXISTS fund_holdings (
             fund_code TEXT NOT NULL, ticker TEXT NOT NULL,

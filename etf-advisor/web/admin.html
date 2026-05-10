@@ -190,6 +190,7 @@ function renderDetail() {
         <option ${f.estimate_method==='holdings'?'selected':''} value="holdings">持仓</option>
       </select></div>
     <div class="form-group"><label>期货/指数代码</label><input value="${f.estimate_symbol||''}" onchange="updateField('${f.code}','estimate_symbol',this.value)"></div>
+    <div class="form-group"><label>同类分组 (sub_category)</label><input value="${f.sub_category||''}" placeholder="空=自成一类" onchange="updateField('${f.code}','sub_category',this.value||null)"></div>
   </div>`;
 
   // Holdings (only for holdings-type funds)

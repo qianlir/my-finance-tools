@@ -1011,6 +1011,18 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 combined *= (1 + c / 100)
             avg_change = (combined - 1) * 100
 
+    # 计算超额净值涨幅（vs 同 sub_category 均值）
+    _sub_groups = {}
+    for r in results:
+        fc = _get_fund_config(r['code'])
+        sub = (fc['sub_category'] if fc and fc.get('sub_category') else None) or ('_solo_' + r['code'])
+        r['_sub'] = sub
+        _sub_groups.setdefault(sub, []).append(r)
+    for sub, group in _sub_groups.items():
+        avg_nav = sum(r.get('nav_return_1y', 0) for r in group) / len(group) if group else 0
+        for r in group:
+            r['excess_nav_return'] = r.get('nav_return_1y', 0) - avg_nav
+
     # 计算多维度超额溢价 + 综合评分
     for r in results:
         r['avg_change'] = avg_change
@@ -1026,9 +1038,10 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             r['excess_by_period'].get(p, 0) * w for p, w in WEIGHTS.items()
         )
 
-        # 分值 = 净值涨幅×10% + (-综合超额)×80% + (-当前估算溢价)×10% + 推荐池加分
+        # 分值 = 超额净值涨幅×10% + (-超额溢价)×80% + (-溢价)×10%
+        # 超额净值涨幅 = 我的1Y净值涨幅 - 同sub_category均值（空=自己，差值为0）
         r['score'] = (
-            r['nav_return_1y'] * 0.10
+            r.get('excess_nav_return', 0) * 0.10
             + (-r['composite']) * 0.80
             + (-r['display_premium']) * 0.10
         )
@@ -1164,6 +1177,7 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "avg_1y": round(r['avg_by_period'].get('1Y', 0), 2),
                 "composite": round(r['composite'], 2),
                 "nav_return_1y": round(r.get('nav_return_1y', 0), 2),
+                "excess_nav_return": round(r.get('excess_nav_return', 0), 2),
                 "price_return_1y": round(r.get('price_return_1y', 0), 2),
                 "days_gt7": r['1Y_gt7'],
                 "score": round(r['score'], 2),
