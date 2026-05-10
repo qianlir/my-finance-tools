@@ -1376,11 +1376,11 @@ function PCPremium({
     style: TH
   }, "1Y\u5747\u6EA2\u4EF7"), /*#__PURE__*/React.createElement("th", {
     style: TH
+  }, "\u6EA2\u4EF7", '>', "7%\u5929"), /*#__PURE__*/React.createElement("th", {
+    style: TH
   }, "\u5E74\u51C0\u503C\u6DA8\u5E45"), /*#__PURE__*/React.createElement("th", {
     style: TH
   }, "\u5E74\u4EF7\u683C\u6DA8\u5E45"), /*#__PURE__*/React.createElement("th", {
-    style: TH
-  }, "\u6EA2\u4EF7", '>', "7%\u5929"), /*#__PURE__*/React.createElement("th", {
     style: TH
   }, "\u5206\u503C"), /*#__PURE__*/React.createElement("th", {
     style: TH
@@ -1461,6 +1461,12 @@ function PCPremium({
       style: {
         ...TDM,
         fontSize: 11,
+        color: e.days_gt7 > 30 ? '#A8342A' : 'var(--fg-3)'
+      }
+    }, e.days_gt7), /*#__PURE__*/React.createElement("td", {
+      style: {
+        ...TDM,
+        fontSize: 11,
         color: chg(e.nav_return_1y)
       }
     }, fmtPct(e.nav_return_1y)), /*#__PURE__*/React.createElement("td", {
@@ -1470,12 +1476,6 @@ function PCPremium({
         color: chg(e.price_return_1y)
       }
     }, fmtPct(e.price_return_1y)), /*#__PURE__*/React.createElement("td", {
-      style: {
-        ...TDM,
-        fontSize: 11,
-        color: e.days_gt7 > 30 ? '#A8342A' : 'var(--fg-3)'
-      }
-    }, e.days_gt7), /*#__PURE__*/React.createElement("td", {
       style: {
         ...TDM,
         fontSize: 13,

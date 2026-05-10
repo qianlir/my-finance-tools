@@ -297,9 +297,9 @@ function PCPremium({ activeIdx, setActiveIdx }) {
               <th style={TH}>3M均溢价</th>
               <th style={TH}>6M均溢价</th>
               <th style={TH}>1Y均溢价</th>
+              <th style={TH}>溢价{'>'}7%天</th>
               <th style={TH}>年净值涨幅</th>
               <th style={TH}>年价格涨幅</th>
-              <th style={TH}>溢价{'>'}7%天</th>
               <th style={TH}>分值</th>
               <th style={TH}>推荐</th>
             </tr>
@@ -329,11 +329,10 @@ function PCPremium({ activeIdx, setActiveIdx }) {
                   <td style={{ ...TDM, color: chg(e.display_premium), fontWeight: 500 }}>{fmtPct(e.display_premium)}</td>
                   <td style={TDM}>{fmtPct(e.avg_3m)}</td>
                   <td style={TDM}>{fmtPct(e.avg_6m)}</td>
-                  <td style={TDM}>{fmtPct(e.avg_1y)}
-                  </td>
+                  <td style={TDM}>{fmtPct(e.avg_1y)}</td>
+                  <td style={{ ...TDM, fontSize: 11, color: e.days_gt7 > 30 ? '#A8342A' : 'var(--fg-3)' }}>{e.days_gt7}</td>
                   <td style={{ ...TDM, fontSize: 11, color: chg(e.nav_return_1y) }}>{fmtPct(e.nav_return_1y)}</td>
                   <td style={{ ...TDM, fontSize: 11, color: chg(e.price_return_1y) }}>{fmtPct(e.price_return_1y)}</td>
-                  <td style={{ ...TDM, fontSize: 11, color: e.days_gt7 > 30 ? '#A8342A' : 'var(--fg-3)' }}>{e.days_gt7}</td>
                   <td style={{ ...TDM, fontSize: 13, fontWeight: 700 }}>{e.score.toFixed(2)}</td>
                   <td style={TD}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
