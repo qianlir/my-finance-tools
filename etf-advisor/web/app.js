@@ -622,6 +622,31 @@ function FundDetailModal({
     }
   }, "\u5173\u95ED"))));
 }
+
+// Arbitrage badge for LOF
+function ArbitrageBadge({
+  arb,
+  limit
+}) {
+  if (!arb) return null;
+  const isRedeem = arb === 'redeem';
+  const color = isRedeem ? '#2A6B4F' : '#A8342A';
+  const bg = isRedeem ? 'rgba(42,107,79,0.08)' : 'rgba(168,52,42,0.08)';
+  const text = isRedeem ? '赎回套利' : '申购套利' + (limit ? ' · 限' + limit : '');
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'var(--font-ui)',
+      fontSize: 10,
+      fontWeight: 600,
+      color,
+      background: bg,
+      padding: '2px 6px',
+      borderRadius: 2,
+      whiteSpace: 'nowrap'
+    }
+  }, text);
+}
+window.ArbitrageBadge = ArbitrageBadge;
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;
@@ -1032,6 +1057,14 @@ function PCPremium({
     const estNav = selFund.nav * r;
     const holdings = selFund.holdings || [];
     const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['综合超额', fmtPct(selFund.composite), chg(selFund.composite)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    if (selFund.subscription_status) {
+      const subMap = {
+        closed: '暂停申购',
+        limited: '限大额' + (selFund.subscription_limit ? ' ' + selFund.subscription_limit : ''),
+        open: '开放申购'
+      };
+      metrics.push(['申购状态', subMap[selFund.subscription_status] || selFund.subscription_status, null]);
+    }
     return /*#__PURE__*/React.createElement("div", {
       style: {
         maxWidth: 1200,
@@ -1054,7 +1087,14 @@ function PCPremium({
         color: 'var(--fg-3)',
         textDecoration: 'none'
       }
-    }, "\u2190 \u8FD4\u56DE\u6EA2\u4EF7\u5206\u6790")), /*#__PURE__*/React.createElement("div", {
+    }, "\u2190 \u8FD4\u56DE\u6EA2\u4EF7\u5206\u6790"), selFund.arbitrage && /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: 12
+      }
+    }, /*#__PURE__*/React.createElement(ArbitrageBadge, {
+      arb: selFund.arbitrage,
+      limit: selFund.subscription_limit
+    }))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: 40
@@ -1470,10 +1510,20 @@ function PCPremium({
       }
     }, e.score.toFixed(2)), /*#__PURE__*/React.createElement("td", {
       style: TD
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3
+      }
     }, /*#__PURE__*/React.createElement(RecIndicator, {
       rec: e.recommendation,
       stars: e.stars
-    })));
+    }), /*#__PURE__*/React.createElement(ArbitrageBadge, {
+      arb: e.arbitrage,
+      limit: e.subscription_limit
+    }))));
   })))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: 'var(--font-ui)',
@@ -1790,6 +1840,14 @@ function MobPremium({
     const estNav = selFund.nav * r;
     const holdings = selFund.holdings || [];
     const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M超额(均值)', fmtPct(selFund.excess_3m) + ' (' + fmtPct(selFund.avg_3m) + ')', chg(selFund.excess_3m)], ['6M超额(均值)', fmtPct(selFund.excess_6m) + ' (' + fmtPct(selFund.avg_6m) + ')', chg(selFund.excess_6m)], ['1Y超额(均值)', fmtPct(selFund.excess_1y) + ' (' + fmtPct(selFund.avg_1y) + ')', chg(selFund.excess_1y)], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['分值', selFund.score.toFixed(2), null]];
+    if (selFund.subscription_status) {
+      var subMap = {
+        closed: '暂停申购',
+        limited: '限大额' + (selFund.subscription_limit ? ' ' + selFund.subscription_limit : ''),
+        open: '开放申购'
+      };
+      rows.push(['申购状态', subMap[selFund.subscription_status] || selFund.subscription_status, null]);
+    }
     return /*#__PURE__*/React.createElement("div", {
       style: {
         padding: '12px 16px 68px'
@@ -1809,7 +1867,10 @@ function MobPremium({
         color: 'var(--fg-3)',
         cursor: 'pointer'
       }
-    }, "\u2190 \u8FD4\u56DE")), /*#__PURE__*/React.createElement("div", {
+    }, "\u2190 \u8FD4\u56DE"), selFund.arbitrage && /*#__PURE__*/React.createElement(ArbitrageBadge, {
+      arb: selFund.arbitrage,
+      limit: selFund.subscription_limit
+    })), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -2036,6 +2097,9 @@ function MobPremium({
     }), /*#__PURE__*/React.createElement(RecCompact, {
       rec: e.recommendation,
       stars: e.stars
+    }), /*#__PURE__*/React.createElement(ArbitrageBadge, {
+      arb: e.arbitrage,
+      limit: e.subscription_limit
     })), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: 'var(--font-ui)',

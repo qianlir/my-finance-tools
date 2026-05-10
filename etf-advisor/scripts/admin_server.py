@@ -165,7 +165,8 @@ class AdminHandler(BaseHTTPRequestHandler):
         fields = []
         values = []
         for k in ['name', 'company', 'category', 'market', 'estimate_method',
-                   'estimate_symbol', 'enabled', 'sort_order', 'rotation_pool', 'rotation_bonus', 'sub_category']:
+                   'estimate_symbol', 'enabled', 'sort_order', 'rotation_pool', 'rotation_bonus', 'sub_category',
+                   'subscription_status', 'subscription_limit']:
             if k in body:
                 fields.append(f"{k}=?")
                 values.append(body[k])

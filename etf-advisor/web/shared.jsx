@@ -270,6 +270,22 @@ function FundDetailModal({ etf, section, onClose }) {
   );
 }
 
+// Arbitrage badge for LOF
+function ArbitrageBadge({ arb, limit }) {
+  if (!arb) return null;
+  const isRedeem = arb === 'redeem';
+  const color = isRedeem ? '#2A6B4F' : '#A8342A';
+  const bg = isRedeem ? 'rgba(42,107,79,0.08)' : 'rgba(168,52,42,0.08)';
+  const text = isRedeem ? '赎回套利' : ('申购套利' + (limit ? ' · 限' + limit : ''));
+  return (
+    <span style={{
+      fontFamily: 'var(--font-ui)', fontSize: 10, fontWeight: 600,
+      color, background: bg, padding: '2px 6px', borderRadius: 2, whiteSpace: 'nowrap'
+    }}>{text}</span>
+  );
+}
+
+window.ArbitrageBadge = ArbitrageBadge;
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;

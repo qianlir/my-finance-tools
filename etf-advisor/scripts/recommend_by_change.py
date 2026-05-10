@@ -1069,6 +1069,22 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 score_for_rec = max(0, score_for_rec - adjustment)
             r['recommendation'] = get_recommendation_level(score_for_rec)
 
+    # LOF 套利标注
+    if index_type == 'LOF':
+        for r in results:
+            fc = _get_fund_config(r['code'])
+            sub_status = fc.get('subscription_status', 'unknown') if fc else 'unknown'
+            sub_limit = fc.get('subscription_limit') if fc else None
+            r['subscription_status'] = sub_status
+            r['subscription_limit'] = sub_limit
+            prem = r['display_premium']
+            if prem < -1.5:
+                r['arbitrage'] = 'redeem'
+            elif prem > 2.0 and sub_status in ('open', 'limited'):
+                r['arbitrage'] = 'subscribe'
+            else:
+                r['arbitrage'] = None
+
     return results, insufficient_data, ft_info
 
 
@@ -1184,7 +1200,10 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "stars": stars,
                 "rotation_pool": r.get('rotation_pool', False),
                 "rotation_bonus": r.get('rotation_bonus', 0),
-                "holdings": _get_holdings_with_prices(r['code']) if index_type in ('OTHERS', 'LOF') else None
+                "holdings": _get_holdings_with_prices(r['code']) if index_type in ('OTHERS', 'LOF') else None,
+                "arbitrage": r.get('arbitrage'),
+                "subscription_status": r.get('subscription_status'),
+                "subscription_limit": r.get('subscription_limit')
             })
 
         # 净值日期（取第一个ETF的nav_date）

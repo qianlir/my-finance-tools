@@ -124,10 +124,15 @@ function MobPremium({ activeIdx, setActiveIdx }) {
       ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
       ['分值', selFund.score.toFixed(2), null],
     ];
+    if (selFund.subscription_status) {
+      var subMap = { closed: '暂停申购', limited: '限大额' + (selFund.subscription_limit ? ' ' + selFund.subscription_limit : ''), open: '开放申购' };
+      rows.push(['申购状态', subMap[selFund.subscription_status] || selFund.subscription_status, null]);
+    }
     return (
       <div style={{ padding: '12px 16px 68px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 12px' }}>
           <span onClick={() => setSelFund(null)} style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', cursor: 'pointer' }}>← 返回</span>
+          {selFund.arbitrage && <ArbitrageBadge arb={selFund.arbitrage} limit={selFund.subscription_limit} />}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -221,6 +226,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
                   <span onClick={ev => { ev.stopPropagation(); setSelFund(e); }} style={{ fontFamily: 'var(--font-display-cjk)', fontSize: 14, fontWeight: 500, borderBottom: '1px dashed var(--ink-20)', cursor: 'pointer' }}>{e.name}</span>
                   <PoolBadge pool={e.rotation_pool} />
                   <RecCompact rec={e.recommendation} stars={e.stars} />
+                  <ArbitrageBadge arb={e.arbitrage} limit={e.subscription_limit} />
                 </div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 1 }}>{e.code}</div>
               </div>

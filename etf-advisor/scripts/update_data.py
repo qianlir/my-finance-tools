@@ -1014,6 +1014,60 @@ def estimate_nav_by_holdings(fund_code, confirmed_nav):
     return est_nav, est_change
 
 
+def update_subscription_status():
+    """查询所有LOF的申购/赎回状态（每天12点后查一次）"""
+    now = datetime.now()
+    if now.hour < 12:
+        return
+    conn = sqlite3.connect(DB_PATH)
+    today = now.strftime('%Y-%m-%d')
+    last = conn.execute("SELECT value FROM admin_config WHERE key='sub_status_date'").fetchone()
+    if last and last[0] == today:
+        conn.close()
+        return
+    lofs = conn.execute("SELECT code FROM fund_config WHERE category='LOF' AND enabled=1").fetchall()
+    conn.close()
+    if not lofs:
+        return
+
+    updated = 0
+    for row in lofs:
+        code = row[0]
+        try:
+            url = f'https://fund.eastmoney.com/{code}.html'
+            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=8)
+            resp.encoding = 'utf-8'
+            text = resp.text
+
+            status = 'unknown'
+            limit_text = None
+            if '暂停申购' in text:
+                status = 'closed'
+            elif '限大额' in text:
+                status = 'limited'
+                m = re.search(r'限大额.*?([\d,.]+万?)', text)
+                if m:
+                    limit_text = m.group(1)
+            elif '开放申购' in text:
+                status = 'open'
+
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("UPDATE fund_config SET subscription_status=?, subscription_limit=? WHERE code=?",
+                         (status, limit_text, code))
+            conn.commit()
+            conn.close()
+            updated += 1
+        except Exception:
+            pass
+
+    if updated:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("INSERT OR REPLACE INTO admin_config (key, value) VALUES ('sub_status_date', ?)", (today,))
+        conn.commit()
+        conn.close()
+        print(f"  申购状态: 更新 {updated} 只LOF")
+
+
 # ============= 数据库操作 =============
 def init_database():
     """初始化数据库"""
@@ -1126,6 +1180,8 @@ def init_database():
             enabled INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0,
             rotation_pool INTEGER DEFAULT 0, rotation_bonus REAL DEFAULT 0,
             sub_category TEXT,
+            subscription_status TEXT,
+            subscription_limit TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP)""",
         """CREATE TABLE IF NOT EXISTS fund_holdings (
             fund_code TEXT NOT NULL, ticker TEXT NOT NULL,
@@ -1553,6 +1609,10 @@ def update_realtime():
         # 更新持仓型基金的美股价格
         print("\n获取持仓股票价格...")
         update_all_holdings_prices()
+
+        # 更新LOF申购状态
+        print("\n更新LOF申购状态...")
+        update_subscription_status()
 
     # 写入快照文件
     write_snapshot(records)

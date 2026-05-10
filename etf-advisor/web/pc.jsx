@@ -166,10 +166,15 @@ function PCPremium({ activeIdx, setActiveIdx }) {
       ['>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null],
       ['分值', selFund.score.toFixed(2), null],
     ];
+    if (selFund.subscription_status) {
+      const subMap = { closed: '暂停申购', limited: '限大额' + (selFund.subscription_limit ? ' ' + selFund.subscription_limit : ''), open: '开放申购' };
+      metrics.push(['申购状态', subMap[selFund.subscription_status] || selFund.subscription_status, null]);
+    }
     return (
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 64px' }}>
         <div style={{ marginBottom: 20 }}>
           <a href="#" onClick={e => { e.preventDefault(); setSelFund(null); }} style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', textDecoration: 'none' }}>← 返回溢价分析</a>
+          {selFund.arbitrage && <span style={{ marginLeft: 12 }}><ArbitrageBadge arb={selFund.arbitrage} limit={selFund.subscription_limit} /></span>}
         </div>
         <div style={{ display: 'flex', gap: 40 }}>
           {/* 左栏：基本信息 + 指标 */}
@@ -339,7 +344,12 @@ function PCPremium({ activeIdx, setActiveIdx }) {
                   <td style={{ ...TDM, fontSize: 11, color: chg(e.price_return_1y) }}>{fmtPct(e.price_return_1y)}</td>
                   <td style={{ ...TDM, fontSize: 11, color: e.days_gt7 > 30 ? '#A8342A' : 'var(--fg-3)' }}>{e.days_gt7}</td>
                   <td style={{ ...TDM, fontSize: 13, fontWeight: 700 }}>{e.score.toFixed(2)}</td>
-                  <td style={TD}><RecIndicator rec={e.recommendation} stars={e.stars} /></td>
+                  <td style={TD}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <RecIndicator rec={e.recommendation} stars={e.stars} />
+                      <ArbitrageBadge arb={e.arbitrage} limit={e.subscription_limit} />
+                    </div>
+                  </td>
                 </tr>
               );
             })}
