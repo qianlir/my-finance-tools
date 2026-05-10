@@ -1652,7 +1652,7 @@ def md_to_html(md_text: str, title: str, gen_time: str = None) -> str:
 <meta charset="utf-8">
 <title>ETF分析 {title}</title>
 <style>
-  body {{ font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 16px; background: #f8f9fa; color: #333; }}
+  body {{ font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 16px; background: #F5EFE4; color: #333; }}
   h1 {{ color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }}
   h2 {{ color: #333; margin-top: 24px; }}
   table {{ border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }}
