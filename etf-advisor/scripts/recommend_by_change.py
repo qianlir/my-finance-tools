@@ -79,6 +79,42 @@ INDEX_CONFIG = {
         'nav_label': '欧股收盘',
         'use_index': True,
     },
+    'GOLD': {
+        'symbol': 'GC',
+        'close_col': 'gc_close',
+        'prev_col': 'gc_prev_close',
+        'change_col': 'gc_change_pct',
+        'source_col': 'gc_source',
+        'name_cn': '黄金',
+        'nav_label': '美股收盘',
+    },
+    'CRUDE': {
+        'symbol': 'CL',
+        'close_col': 'cl_close',
+        'prev_col': 'cl_prev_close',
+        'change_col': 'cl_change_pct',
+        'source_col': 'cl_source',
+        'name_cn': '原油',
+        'nav_label': '美股收盘',
+    },
+    'CAC': {
+        'symbol': 'CAC',
+        'close_col': 'cac_idx_close',
+        'prev_col': 'cac_idx_prev_close',
+        'change_col': 'cac_idx_change_pct',
+        'name_cn': '法国CAC40',
+        'nav_label': '欧股收盘',
+        'use_index': True,
+    },
+    'SENSEX': {
+        'symbol': 'SENSEX',
+        'close_col': 'sensex_idx_close',
+        'prev_col': 'sensex_idx_prev_close',
+        'change_col': 'sensex_idx_change_pct',
+        'name_cn': '印度SENSEX',
+        'nav_label': '印股收盘',
+        'use_index': True,
+    },
     'OTHERS': {
         'symbol': '',
         'name_cn': '其他',
@@ -520,7 +556,9 @@ def get_futures_info() -> List[Dict]:
         SELECT us_date, nq_close, nq_prev_close, nq_change_pct,
                es_close, es_prev_close, es_change_pct,
                ym_close, ym_prev_close, ym_change_pct,
-               nk_close, nk_prev_close, nk_change_pct
+               nk_close, nk_prev_close, nk_change_pct,
+               gc_close, gc_prev_close, gc_change_pct,
+               cl_close, cl_prev_close, cl_change_pct
         FROM futures_data
         WHERE us_date IS NOT NULL
         ORDER BY us_date DESC LIMIT 2
@@ -553,6 +591,20 @@ def get_futures_info() -> List[Dict]:
             if row['nk_close'] is not None:
                 entry['nk_price'] = row['nk_close']
                 entry['nk_change'] = row['nk_change_pct']
+        except (IndexError, KeyError):
+            pass
+
+        try:
+            if row['gc_close'] is not None:
+                entry['gc_price'] = row['gc_close']
+                entry['gc_change'] = row['gc_change_pct']
+        except (IndexError, KeyError):
+            pass
+
+        try:
+            if row['cl_close'] is not None:
+                entry['cl_price'] = row['cl_close']
+                entry['cl_change'] = row['cl_change_pct']
         except (IndexError, KeyError):
             pass
 
@@ -919,13 +971,24 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 estimated_nav, _est_chg = estimate_nav_by_holdings(code, nav)
                 display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
             elif _fc and _fc['estimate_method'] == 'futures' and _fc.get('estimate_symbol') and nav:
-                # OTHERS 中的期货型（如道琼斯）
+                # OTHERS/LOF 中的期货型（如道琼斯、黄金、原油）
                 _sym = _fc['estimate_symbol']
-                _idx_type_for_sym = {'NQ': 'NASDAQ', 'ES': 'SP500', 'YM': 'DOW'}.get(_sym, 'DOW')
+                _idx_type_for_sym = {'NQ': 'NASDAQ', 'ES': 'SP500', 'YM': 'DOW', 'GC': 'GOLD', 'CL': 'CRUDE'}.get(_sym, 'DOW')
                 nav_date_close = get_nav_date_futures_close(nav_date, _idx_type_for_sym)
                 current_futures_price = get_current_futures_price(_idx_type_for_sym)
                 if nav_date_close and current_futures_price:
                     estimated_nav = nav * (current_futures_price / nav_date_close)
+                    display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+                else:
+                    estimated_nav = nav
+                    display_premium = current.get('premium_rate', 0)
+            elif _fc and _fc['estimate_method'] == 'index' and _fc.get('estimate_symbol') and nav:
+                # OTHERS/LOF 中的指数型（如CAC、SENSEX）
+                _idx_type = _fc['estimate_symbol']
+                nav_date_close = get_nav_date_futures_close(nav_date, _idx_type)
+                current_idx_price = get_current_futures_price(_idx_type)
+                if nav_date_close and current_idx_price:
+                    estimated_nav = nav * (current_idx_price / nav_date_close)
                     display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
                 else:
                     estimated_nav = nav
@@ -1462,7 +1525,8 @@ def print_actionable_summary(all_results: Dict[str, List[Dict]], holdings: List[
 
 def get_futures_from_db(symbol: str) -> float:
     """从DB获取最新的期货价格"""
-    col_map = {'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close', 'NK': 'nk_close'}
+    col_map = {'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close', 'NK': 'nk_close',
+               'GC': 'gc_close', 'CL': 'cl_close'}
     col = col_map.get(symbol)
     if not col:
         return 0
@@ -2189,6 +2253,12 @@ def format_futures_display(futures_list: List[Dict]) -> List[str]:
         if entry.get('nk_price') is not None:
             chg = entry.get('nk_change', 0) or 0
             parts.append(f"NK {entry['nk_price']:.0f} ({chg:+.2f}%)")
+        if entry.get('gc_price') is not None:
+            chg = entry.get('gc_change', 0) or 0
+            parts.append(f"GC {entry['gc_price']:.0f} ({chg:+.2f}%)")
+        if entry.get('cl_price') is not None:
+            chg = entry.get('cl_change', 0) or 0
+            parts.append(f"CL {entry['cl_price']:.2f} ({chg:+.2f}%)")
         if parts:
             lines.append(f"期货 {entry['date']}: {' | '.join(parts)}")
 

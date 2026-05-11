@@ -389,6 +389,16 @@ def get_realtime_futures():
     if ym_data:
         futures_data['YM'] = ym_data
 
+    # GC期货 (黄金)
+    gc_data = get_futures_from_sina('GC')
+    if gc_data:
+        futures_data['GC'] = gc_data
+
+    # CL期货 (原油)
+    cl_data = get_futures_from_sina('CL')
+    if cl_data:
+        futures_data['CL'] = cl_data
+
     # NK期货 (日经225)
     nk_data = get_futures_from_sina('NK')
     if nk_data:
@@ -403,6 +413,16 @@ def get_realtime_futures():
     dax_idx = get_dax_index_realtime()
     if dax_idx:
         futures_data['DAX_IDX'] = dax_idx
+
+    # 法国CAC40指数（东方财富 + 新浪 b_CAC fallback）
+    cac_idx = get_cac_index_realtime()
+    if cac_idx:
+        futures_data['CAC_IDX'] = cac_idx
+
+    # 印度SENSEX指数（东方财富 + 新浪 b_SENSEX fallback）
+    sensex_idx = get_sensex_index_realtime()
+    if sensex_idx:
+        futures_data['SENSEX_IDX'] = sensex_idx
 
     return futures_data
 
@@ -578,6 +598,118 @@ def _dax_idx_from_sina():
                 # 返回 price，prev_close 由 DB 历史补充
                 return {'price': price, 'prev_close': None,
                         'change_pct': None, 'source': 'sina_b_DAX'}
+    except Exception:
+        pass
+    return None
+
+
+def get_cac_index_realtime():
+    """获取法国CAC40指数实时数据（多源 fallback）"""
+    for fn in [_cac_idx_from_eastmoney, _cac_idx_from_eastmoney_curl, _cac_idx_from_sina]:
+        result = fn()
+        if result:
+            return result
+    return None
+
+
+def _cac_idx_from_eastmoney():
+    """东方财富 CAC40 指数 (requests)"""
+    try:
+        url = 'https://push2.eastmoney.com/api/qt/stock/get?secid=100.FCHI&fields=f43,f60,f170'
+        resp = requests.get(url, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
+        return _parse_eastmoney_nk_idx(resp.json().get('data', {}))
+    except Exception:
+        return None
+
+
+def _cac_idx_from_eastmoney_curl():
+    """东方财富 CAC40 via curl"""
+    try:
+        import subprocess as _sp
+        url = 'https://push2.eastmoney.com/api/qt/stock/get?secid=100.FCHI&fields=f43,f60,f170'
+        r = _sp.run(['curl', '-s', '--noproxy', '*', '--max-time', '8', url],
+                     capture_output=True, text=True, timeout=12)
+        if r.returncode == 0 and r.stdout.strip():
+            return _parse_eastmoney_nk_idx(json.loads(r.stdout).get('data', {}))
+    except Exception:
+        pass
+    return None
+
+
+def _cac_idx_from_sina():
+    """新浪 b_CAC 指数"""
+    try:
+        url = 'https://hq.sinajs.cn/list=b_CAC'
+        response = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'
+        }, timeout=10)
+        response.encoding = 'gbk'
+        m = re.search(r'"([^"]+)"', response.text)
+        if m:
+            fields = m.group(1).split(',')
+            if len(fields) >= 4 and fields[1]:
+                price = float(fields[1])
+                change_amt = float(fields[2]) if fields[2] else None
+                prev_close = (price - change_amt) if change_amt is not None else None
+                change_pct = float(fields[3]) if fields[3] else None
+                return {'price': price, 'prev_close': prev_close,
+                        'change_pct': change_pct, 'source': 'sina_b_CAC'}
+    except Exception:
+        pass
+    return None
+
+
+def get_sensex_index_realtime():
+    """获取印度SENSEX指数实时数据（多源 fallback）"""
+    for fn in [_sensex_idx_from_eastmoney, _sensex_idx_from_eastmoney_curl, _sensex_idx_from_sina]:
+        result = fn()
+        if result:
+            return result
+    return None
+
+
+def _sensex_idx_from_eastmoney():
+    """东方财富 SENSEX 指数 (requests)"""
+    try:
+        url = 'https://push2.eastmoney.com/api/qt/stock/get?secid=100.SENSEX&fields=f43,f60,f170'
+        resp = requests.get(url, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
+        return _parse_eastmoney_nk_idx(resp.json().get('data', {}))
+    except Exception:
+        return None
+
+
+def _sensex_idx_from_eastmoney_curl():
+    """东方财富 SENSEX via curl"""
+    try:
+        import subprocess as _sp
+        url = 'https://push2.eastmoney.com/api/qt/stock/get?secid=100.SENSEX&fields=f43,f60,f170'
+        r = _sp.run(['curl', '-s', '--noproxy', '*', '--max-time', '8', url],
+                     capture_output=True, text=True, timeout=12)
+        if r.returncode == 0 and r.stdout.strip():
+            return _parse_eastmoney_nk_idx(json.loads(r.stdout).get('data', {}))
+    except Exception:
+        pass
+    return None
+
+
+def _sensex_idx_from_sina():
+    """新浪 b_SENSEX 指数"""
+    try:
+        url = 'https://hq.sinajs.cn/list=b_SENSEX'
+        response = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'
+        }, timeout=10)
+        response.encoding = 'gbk'
+        m = re.search(r'"([^"]+)"', response.text)
+        if m:
+            fields = m.group(1).split(',')
+            if len(fields) >= 4 and fields[1]:
+                price = float(fields[1])
+                change_amt = float(fields[2]) if fields[2] else None
+                prev_close = (price - change_amt) if change_amt is not None else None
+                change_pct = float(fields[3]) if fields[3] else None
+                return {'price': price, 'prev_close': prev_close,
+                        'change_pct': change_pct, 'source': 'sina_b_SENSEX'}
     except Exception:
         pass
     return None
@@ -775,34 +907,142 @@ def backfill_dax_index_history(days=30):
     return updated
 
 
+def backfill_cac_index_history(days=30):
+    """从东方财富回补CAC40指数历史收盘价到 futures_data 的 cac_idx_close 列"""
+    try:
+        url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
+               '?secid=100.FCHI&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
+               f'&beg=0&end=0&lmt={days + 5}')
+        resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        klines = resp.json().get('data', {}).get('klines', [])
+    except Exception:
+        try:
+            import subprocess as _sp
+            r = _sp.run(['curl', '-s', '--noproxy', '*', '--max-time', '15', url],
+                        capture_output=True, text=True, timeout=20)
+            klines = json.loads(r.stdout).get('data', {}).get('klines', []) if r.returncode == 0 else []
+        except Exception:
+            return 0
+
+    if len(klines) < 2:
+        return 0
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    updated = 0
+    for i, kl in enumerate(klines):
+        parts = kl.split(',')
+        date_str, close = parts[0], float(parts[2])
+        prev_close = float(klines[i - 1].split(',')[2]) if i > 0 else None
+        if date_str >= today_str:
+            continue
+        cursor.execute("SELECT date FROM futures_data WHERE date = ?", (date_str,))
+        if cursor.fetchone():
+            cursor.execute("""
+                UPDATE futures_data
+                SET cac_idx_close = COALESCE(?, cac_idx_close),
+                    cac_idx_prev_close = COALESCE(?, cac_idx_prev_close)
+                WHERE date = ?
+            """, (close, prev_close, date_str))
+        else:
+            cursor.execute("""
+                INSERT INTO futures_data (date, us_date, cac_idx_close, cac_idx_prev_close)
+                VALUES (?, ?, ?, ?)
+            """, (date_str, date_str, close, prev_close))
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def backfill_sensex_index_history(days=30):
+    """从东方财富回补SENSEX指数历史收盘价到 futures_data 的 sensex_idx_close 列"""
+    try:
+        url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
+               '?secid=100.SENSEX&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
+               f'&beg=0&end=0&lmt={days + 5}')
+        resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        klines = resp.json().get('data', {}).get('klines', [])
+    except Exception:
+        try:
+            import subprocess as _sp
+            r = _sp.run(['curl', '-s', '--noproxy', '*', '--max-time', '15', url],
+                        capture_output=True, text=True, timeout=20)
+            klines = json.loads(r.stdout).get('data', {}).get('klines', []) if r.returncode == 0 else []
+        except Exception:
+            return 0
+
+    if len(klines) < 2:
+        return 0
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    updated = 0
+    for i, kl in enumerate(klines):
+        parts = kl.split(',')
+        date_str, close = parts[0], float(parts[2])
+        prev_close = float(klines[i - 1].split(',')[2]) if i > 0 else None
+        if date_str >= today_str:
+            continue
+        cursor.execute("SELECT date FROM futures_data WHERE date = ?", (date_str,))
+        if cursor.fetchone():
+            cursor.execute("""
+                UPDATE futures_data
+                SET sensex_idx_close = COALESCE(?, sensex_idx_close),
+                    sensex_idx_prev_close = COALESCE(?, sensex_idx_prev_close)
+                WHERE date = ?
+            """, (close, prev_close, date_str))
+        else:
+            cursor.execute("""
+                INSERT INTO futures_data (date, us_date, sensex_idx_close, sensex_idx_prev_close)
+                VALUES (?, ?, ?, ?)
+            """, (date_str, date_str, close, prev_close))
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    return updated
+
+
 def save_futures_data(date, nq_change, es_change, ym_change=None,
                       nq_close=None, es_close=None, ym_close=None,
                       nq_prev_close=None, es_prev_close=None, ym_prev_close=None,
                       us_date=None, nq_source='sina', es_source='sina', ym_source='sina',
                       nk_change=None, nk_close=None, nk_prev_close=None, nk_source='sina',
                       nk_idx_close=None, nk_idx_prev_close=None, nk_idx_change=None,
-                      dax_idx_close=None, dax_idx_prev_close=None, dax_idx_change=None):
-    """保存期货数据到数据库（NQ/ES/YM/NK期货用 INSERT OR REPLACE）"""
+                      dax_idx_close=None, dax_idx_prev_close=None, dax_idx_change=None,
+                      gc_close=None, gc_prev_close=None, gc_change=None, gc_source='sina',
+                      cl_close=None, cl_prev_close=None, cl_change=None, cl_source='sina',
+                      cac_idx_close=None, cac_idx_prev_close=None, cac_idx_change=None,
+                      sensex_idx_close=None, sensex_idx_prev_close=None, sensex_idx_change=None):
+    """保存期货数据到数据库（NQ/ES/YM/NK/GC/CL期货用 INSERT OR REPLACE）"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # 美股 + NK期货：INSERT OR REPLACE（原有逻辑不变）
+        # 美股 + NK/GC/CL期货：INSERT OR REPLACE
         cursor.execute("""
             INSERT OR REPLACE INTO futures_data
             (date, us_date, nq_close, nq_prev_close, nq_change_pct,
              es_close, es_prev_close, es_change_pct,
              ym_close, ym_prev_close, ym_change_pct,
              nk_close, nk_prev_close, nk_change_pct,
-             nq_source, es_source, ym_source, nk_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             gc_close, gc_prev_close, gc_change_pct,
+             cl_close, cl_prev_close, cl_change_pct,
+             nq_source, es_source, ym_source, nk_source, gc_source, cl_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (date, us_date, nq_close, nq_prev_close, nq_change,
               es_close, es_prev_close, es_change,
               ym_close, ym_prev_close, ym_change,
               nk_close, nk_prev_close, nk_change,
-              nq_source, es_source, ym_source, nk_source))
+              gc_close, gc_prev_close, gc_change,
+              cl_close, cl_prev_close, cl_change,
+              nq_source, es_source, ym_source, nk_source, gc_source, cl_source))
 
-        # 日经指数 + DAX指数：单独 UPDATE + COALESCE（不覆盖已有准确数据）
+        # 日经指数 + DAX指数 + CAC指数 + SENSEX指数：单独 UPDATE + COALESCE
         if nk_idx_close is not None:
             cursor.execute("""
                 UPDATE futures_data
@@ -819,6 +1059,22 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                     dax_idx_change_pct = COALESCE(dax_idx_change_pct, ?)
                 WHERE date = ?
             """, (dax_idx_close, dax_idx_prev_close, dax_idx_change, date))
+        if cac_idx_close is not None:
+            cursor.execute("""
+                UPDATE futures_data
+                SET cac_idx_close = COALESCE(cac_idx_close, ?),
+                    cac_idx_prev_close = COALESCE(cac_idx_prev_close, ?),
+                    cac_idx_change_pct = COALESCE(cac_idx_change_pct, ?)
+                WHERE date = ?
+            """, (cac_idx_close, cac_idx_prev_close, cac_idx_change, date))
+        if sensex_idx_close is not None:
+            cursor.execute("""
+                UPDATE futures_data
+                SET sensex_idx_close = COALESCE(sensex_idx_close, ?),
+                    sensex_idx_prev_close = COALESCE(sensex_idx_prev_close, ?),
+                    sensex_idx_change_pct = COALESCE(sensex_idx_change_pct, ?)
+                WHERE date = ?
+            """, (sensex_idx_close, sensex_idx_prev_close, sensex_idx_change, date))
 
         conn.commit()
         conn.close()
@@ -1166,6 +1422,23 @@ def init_database():
     # 添加日经225指数 + DAX指数字段
     for col in ['nk_idx_close', 'nk_idx_prev_close', 'nk_idx_change_pct',
                 'dax_idx_close', 'dax_idx_prev_close', 'dax_idx_change_pct']:
+        try:
+            cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
+        except Exception:
+            pass
+
+    # 添加 GC/CL 期货字段
+    for col in ['gc_close', 'gc_prev_close', 'gc_change_pct', 'gc_source',
+                'cl_close', 'cl_prev_close', 'cl_change_pct', 'cl_source']:
+        try:
+            col_type = 'TEXT' if 'source' in col else 'REAL'
+            cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
+
+    # 添加 CAC40 + SENSEX 指数字段
+    for col in ['cac_idx_close', 'cac_idx_prev_close', 'cac_idx_change_pct',
+                'sensex_idx_close', 'sensex_idx_prev_close', 'sensex_idx_change_pct']:
         try:
             cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
         except Exception:
@@ -1544,6 +1817,8 @@ def update_realtime():
         es = futures.get('ES', {})
         ym = futures.get('YM', {})
         nk = futures.get('NK', {})
+        gc = futures.get('GC', {})
+        cl = futures.get('CL', {})
         nq_change = nq.get('change_pct')
         es_change = es.get('change_pct')
         ym_change = ym.get('change_pct')
@@ -1556,6 +1831,12 @@ def update_realtime():
         es_prev_close = es.get('prev_close')
         ym_prev_close = ym.get('prev_close')
         nk_prev_close = nk.get('prev_close')
+        gc_close = gc.get('price')
+        gc_prev_close = gc.get('prev_close')
+        gc_change = gc.get('change_pct')
+        cl_close = cl.get('price')
+        cl_prev_close = cl.get('prev_close')
+        cl_change = cl.get('change_pct')
         nk_idx = futures.get('NK_IDX', {})
         nk_idx_close = nk_idx.get('price')
         nk_idx_prev_close = nk_idx.get('prev_close')
@@ -1564,6 +1845,14 @@ def update_realtime():
         dax_idx_close = dax_idx.get('price')
         dax_idx_prev_close = dax_idx.get('prev_close')
         dax_idx_change = dax_idx.get('change_pct')
+        cac_idx = futures.get('CAC_IDX', {})
+        cac_idx_close = cac_idx.get('price')
+        cac_idx_prev_close = cac_idx.get('prev_close')
+        cac_idx_change = cac_idx.get('change_pct')
+        sensex_idx = futures.get('SENSEX_IDX', {})
+        sensex_idx_close = sensex_idx.get('price')
+        sensex_idx_prev_close = sensex_idx.get('prev_close')
+        sensex_idx_change = sensex_idx.get('change_pct')
 
         if nq_change is not None or es_change is not None or ym_change is not None or nk_change is not None:
             us_date = get_us_trading_date()
@@ -1575,13 +1864,27 @@ def update_realtime():
                                  nk_idx_close=nk_idx_close, nk_idx_prev_close=nk_idx_prev_close,
                                  nk_idx_change=nk_idx_change,
                                  dax_idx_close=dax_idx_close, dax_idx_prev_close=dax_idx_prev_close,
-                                 dax_idx_change=dax_idx_change):
+                                 dax_idx_change=dax_idx_change,
+                                 gc_close=gc_close, gc_prev_close=gc_prev_close, gc_change=gc_change,
+                                 cl_close=cl_close, cl_prev_close=cl_prev_close, cl_change=cl_change,
+                                 cac_idx_close=cac_idx_close, cac_idx_prev_close=cac_idx_prev_close,
+                                 cac_idx_change=cac_idx_change,
+                                 sensex_idx_close=sensex_idx_close, sensex_idx_prev_close=sensex_idx_prev_close,
+                                 sensex_idx_change=sensex_idx_change):
                 for sym, chg in [('NQ', nq_change), ('ES', es_change), ('YM', ym_change), ('NK', nk_change)]:
                     print(f"  {sym}涨跌: {chg:+.2f}%" if chg is not None else f"  {sym}涨跌: N/A")
                 if nk_idx_change is not None:
                     print(f"  日经指数: {nk_idx_close:.0f} ({nk_idx_change:+.2f}%)")
                 if dax_idx_change is not None:
                     print(f"  DAX指数: {dax_idx_close:.0f} ({dax_idx_change:+.2f}%)")
+                if gc_change is not None:
+                    print(f"  黄金GC: {gc_close:.1f} ({gc_change:+.2f}%)")
+                if cl_change is not None:
+                    print(f"  原油CL: {cl_close:.2f} ({cl_change:+.2f}%)")
+                if cac_idx_change is not None:
+                    print(f"  CAC40: {cac_idx_close:.0f} ({cac_idx_change:+.2f}%)")
+                if sensex_idx_change is not None:
+                    print(f"  SENSEX: {sensex_idx_close:.0f} ({sensex_idx_change:+.2f}%)")
                 print(f"期货数据: 已保存 (美股日: {us_date})")
             else:
                 print("期货数据: 保存失败")
@@ -1598,7 +1901,9 @@ def update_realtime():
 
         # 回补日经225 + DAX指数历史收盘价
         for name, fn in [('日经指数', backfill_nikkei_index_history),
-                          ('DAX指数', backfill_dax_index_history)]:
+                          ('DAX指数', backfill_dax_index_history),
+                          ('CAC指数', backfill_cac_index_history),
+                          ('SENSEX指数', backfill_sensex_index_history)]:
             try:
                 n = fn(days=30)
                 if n:
