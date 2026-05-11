@@ -1354,43 +1354,77 @@ def _is_hk_ticker(ticker):
     return len(ticker) == 5 and ticker.isdigit()
 
 
+def _fetch_hk_from_sina(tickers):
+    """新浪 rt_hk 批量获取港股价格"""
+    symbols = ','.join(f'rt_hk{t}' for t in tickers)
+    resp = requests.get(f'https://hq.sinajs.cn/list={symbols}', headers={
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://finance.sina.com.cn'
+    }, timeout=15)
+    resp.encoding = 'gbk'
+
+    result = {}
+    for line in resp.text.strip().split('\n'):
+        m = re.search(r'rt_hk(\d+)="([^"]+)"', line)
+        if not m:
+            continue
+        code = m.group(1)
+        f = m.group(2).split(',')
+        if len(f) < 10 or not f[6]:
+            continue
+        price = float(f[6])
+        prev_close = float(f[3]) if f[3] else price
+        change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+        result[code] = {
+            'price': price, 'prev_close': prev_close,
+            'after_hours': 0, 'change_pct': change_pct
+        }
+    return result
+
+
+def _fetch_hk_from_tencent(tickers):
+    """腾讯 r_hk 批量获取港股价格"""
+    symbols = ','.join(f'r_hk{t}' for t in tickers)
+    resp = requests.get(f'http://qt.gtimg.cn/q={symbols}', headers={
+        'User-Agent': 'Mozilla/5.0'
+    }, timeout=15)
+    resp.encoding = 'gbk'
+
+    result = {}
+    for line in resp.text.strip().split(';'):
+        if '~' not in line or 'none_match' in line:
+            continue
+        parts = line.split('~')
+        if len(parts) < 33 or not parts[3]:
+            continue
+        code = parts[2]
+        try:
+            price = float(parts[3])
+            prev_close = float(parts[4]) if parts[4] else price
+            change_pct = float(parts[32]) if parts[32] else ((price - prev_close) / prev_close * 100)
+            result[code] = {
+                'price': price, 'prev_close': prev_close,
+                'after_hours': 0, 'change_pct': change_pct
+            }
+        except (ValueError, ZeroDivisionError):
+            continue
+    return result
+
+
 def fetch_hk_stock_prices(tickers):
-    """新浪批量获取港股价格
+    """批量获取港股价格（新浪 → 腾讯 fallback）
     返回: {'00700': {'price': 465.0, 'prev_close': 471.4, 'change_pct': -1.36}, ...}
     """
     if not tickers:
         return {}
-    symbols = ','.join(f'rt_hk{t}' for t in tickers)
-    try:
-        resp = requests.get(f'https://hq.sinajs.cn/list={symbols}', headers={
-            'User-Agent': 'Mozilla/5.0',
-            'Referer': 'https://finance.sina.com.cn'
-        }, timeout=15)
-        resp.encoding = 'gbk'
-
-        result = {}
-        for line in resp.text.strip().split('\n'):
-            m = re.search(r'rt_hk(\d+)="([^"]+)"', line)
-            if not m:
-                continue
-            code = m.group(1)
-            f = m.group(2).split(',')
-            if len(f) < 10 or not f[6]:
-                continue
-            try:
-                price = float(f[6])
-                prev_close = float(f[3]) if f[3] else price
-                change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
-                result[code] = {
-                    'price': price, 'prev_close': prev_close,
-                    'after_hours': 0, 'change_pct': change_pct
-                }
-            except (ValueError, ZeroDivisionError):
-                continue
-        return result
-    except Exception as e:
-        print(f"  获取港股价格失败: {e}")
-        return {}
+    for fn in [_fetch_hk_from_sina, _fetch_hk_from_tencent]:
+        try:
+            result = fn(tickers)
+            if result:
+                return result
+        except Exception:
+            continue
+    return {}
 
 
 def update_all_holdings_prices():
