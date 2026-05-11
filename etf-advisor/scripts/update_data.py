@@ -476,6 +476,16 @@ def get_realtime_futures():
     if sox_data:
         futures_data['SOX_IDX'] = sox_data
 
+    # VIX 恐慌指数（新浪 b_VIX）
+    vix_data = _get_vix_realtime()
+    if vix_data:
+        futures_data['VIX'] = vix_data
+
+    # VXN 恐慌指数估算
+    vxn_data = _estimate_vxn_realtime(vix_data)
+    if vxn_data:
+        futures_data['VXN'] = vxn_data
+
     return futures_data
 
 
@@ -786,6 +796,65 @@ def _get_sox_realtime():
         prev_close = float(f[26]) if f[26] else price
         change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
         return {'price': price, 'prev_close': prev_close, 'change_pct': change_pct, 'source': 'sina_gb_sox'}
+    except Exception:
+        return None
+
+
+def _get_vix_realtime():
+    """获取VIX恐慌指数实时数据（新浪 b_VIX）
+    fields: [0]名 [1]现价 [2]涨跌额 [3]涨跌幅% [6]日期 [7]时间 [8]今开 [9]昨收
+    """
+    try:
+        url = 'https://hq.sinajs.cn/list=b_VIX'
+        resp = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.sina.com.cn'
+        }, timeout=10)
+        resp.encoding = 'gbk'
+        m = re.search(r'"([^"]+)"', resp.text)
+        if not m:
+            return None
+        f = m.group(1).split(',')
+        if len(f) < 10 or not f[1]:
+            return None
+        price = float(f[1])
+        prev_close = float(f[9]) if f[9] else price
+        change_pct = float(f[3]) if f[3] else ((price - prev_close) / prev_close * 100)
+        return {'price': price, 'prev_close': prev_close, 'change_pct': change_pct, 'source': 'sina_b_VIX'}
+    except Exception:
+        return None
+
+
+def _estimate_vxn_realtime(vix_data):
+    """估算VXN实时值: VXN_昨收 × (VIX_实时 / VIX_昨收)
+    如果无 VXN 历史数据，fallback 用 VIX × 1.21
+    """
+    if not vix_data:
+        return None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        # 取最近一条有 VXN 的记录
+        row = cursor.execute(
+            "SELECT vxn_close, vix_close FROM futures_data WHERE vxn_close IS NOT NULL AND vix_close IS NOT NULL ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+
+        vix_current = vix_data['price']
+        vix_prev = vix_data['prev_close']
+
+        if row and row[0] and row[1]:
+            vxn_prev = row[0]
+            vix_db_prev = row[1]
+            ratio = vix_current / vix_db_prev
+            vxn_est = vxn_prev * ratio
+        else:
+            # Fallback: VIX × 1.21（近1年均值）
+            vxn_est = vix_current * 1.21
+            vxn_prev = vix_prev * 1.21
+
+        change_pct = ((vxn_est - vxn_prev) / vxn_prev * 100) if vxn_prev > 0 else 0
+        return {'price': vxn_est, 'prev_close': vxn_prev, 'change_pct': change_pct, 'source': 'estimated'}
     except Exception:
         return None
 
@@ -1143,6 +1212,54 @@ def backfill_sox_index_history(days=30):
     return updated
 
 
+def backfill_vix_vxn_history(days=30):
+    """从 FRED 回补 VIX/VXN 历史收盘价到 futures_data（curl fallback）"""
+    import subprocess
+    updated = 0
+    for fred_id, col in [('VIXCLS', 'vix_close'), ('VXNCLS', 'vxn_close')]:
+        try:
+            url = f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={fred_id}'
+            csv_text = None
+            # Try requests first
+            try:
+                resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+                if resp.status_code == 200 and 'date,' in resp.text[:20]:
+                    csv_text = resp.text
+            except Exception:
+                pass
+            # Fallback: curl (bypass proxy)
+            if not csv_text:
+                r = subprocess.run(['curl', '-s', '--noproxy', '*', '--max-time', '15', url],
+                                   capture_output=True, text=True, timeout=20)
+                if r.returncode == 0 and 'date,' in r.stdout[:20]:
+                    csv_text = r.stdout
+
+            if not csv_text:
+                continue
+
+            rows = []
+            for line in csv_text.strip().split('\n')[1:]:  # skip header
+                parts = line.split(',')
+                if len(parts) == 2 and parts[1]:
+                    rows.append((parts[0], float(parts[1])))
+            rows = rows[-(days + 5):]
+
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            for date_str, val in rows:
+                cursor.execute("SELECT date FROM futures_data WHERE date = ?", (date_str,))
+                if cursor.fetchone():
+                    cursor.execute(f"UPDATE futures_data SET {col} = COALESCE({col}, ?) WHERE date = ?", (val, date_str))
+                else:
+                    cursor.execute(f"INSERT INTO futures_data (date, us_date, {col}) VALUES (?, ?, ?)", (date_str, date_str, val))
+            conn.commit()
+            conn.close()
+            updated += len(rows)
+        except Exception:
+            pass
+    return updated
+
+
 def save_futures_data(date, nq_change, es_change, ym_change=None,
                       nq_close=None, es_close=None, ym_close=None,
                       nq_prev_close=None, es_prev_close=None, ym_prev_close=None,
@@ -1154,7 +1271,9 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                       cl_close=None, cl_prev_close=None, cl_change=None, cl_source='sina',
                       cac_idx_close=None, cac_idx_prev_close=None, cac_idx_change=None,
                       sensex_idx_close=None, sensex_idx_prev_close=None, sensex_idx_change=None,
-                      sox_idx_close=None, sox_idx_prev_close=None, sox_idx_change=None):
+                      sox_idx_close=None, sox_idx_prev_close=None, sox_idx_change=None,
+                      vix_close=None, vix_prev_close=None, vix_change_pct=None,
+                      vxn_close=None, vxn_prev_close=None, vxn_change_pct=None):
     """保存期货数据到数据库（NQ/ES/YM/NK/GC/CL期货用 INSERT OR REPLACE）"""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -1220,6 +1339,22 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                     sox_idx_change_pct = COALESCE(sox_idx_change_pct, ?)
                 WHERE date = ?
             """, (sox_idx_close, sox_idx_prev_close, sox_idx_change, date))
+        if vix_close is not None:
+            cursor.execute("""
+                UPDATE futures_data
+                SET vix_close = COALESCE(vix_close, ?),
+                    vix_prev_close = COALESCE(vix_prev_close, ?),
+                    vix_change_pct = COALESCE(vix_change_pct, ?)
+                WHERE date = ?
+            """, (vix_close, vix_prev_close, vix_change_pct, date))
+        if vxn_close is not None:
+            cursor.execute("""
+                UPDATE futures_data
+                SET vxn_close = COALESCE(vxn_close, ?),
+                    vxn_prev_close = COALESCE(vxn_prev_close, ?),
+                    vxn_change_pct = COALESCE(vxn_change_pct, ?)
+                WHERE date = ?
+            """, (vxn_close, vxn_prev_close, vxn_change_pct, date))
 
         conn.commit()
         conn.close()
@@ -1701,6 +1836,14 @@ def init_database():
         except Exception:
             pass
 
+    # 添加 VIX/VXN 恐慌指数字段
+    for col in ['vix_close', 'vix_prev_close', 'vix_change_pct',
+                'vxn_close', 'vxn_prev_close', 'vxn_change_pct']:
+        try:
+            cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
+        except Exception:
+            pass
+
     # V2: 新表
     for ddl in [
         """CREATE TABLE IF NOT EXISTS fund_config (
@@ -2114,6 +2257,14 @@ def update_realtime():
         sox_idx_close = sox_idx.get('price')
         sox_idx_prev_close = sox_idx.get('prev_close')
         sox_idx_change = sox_idx.get('change_pct')
+        vix = futures.get('VIX', {})
+        vix_close = vix.get('price')
+        vix_prev_close = vix.get('prev_close')
+        vix_change_pct = vix.get('change_pct')
+        vxn = futures.get('VXN', {})
+        vxn_close = vxn.get('price')
+        vxn_prev_close = vxn.get('prev_close')
+        vxn_change_pct = vxn.get('change_pct')
 
         if nq_change is not None or es_change is not None or ym_change is not None or nk_change is not None:
             us_date = get_us_trading_date()
@@ -2133,7 +2284,9 @@ def update_realtime():
                                  sensex_idx_close=sensex_idx_close, sensex_idx_prev_close=sensex_idx_prev_close,
                                  sensex_idx_change=sensex_idx_change,
                                  sox_idx_close=sox_idx_close, sox_idx_prev_close=sox_idx_prev_close,
-                                 sox_idx_change=sox_idx_change):
+                                 sox_idx_change=sox_idx_change,
+                                 vix_close=vix_close, vix_prev_close=vix_prev_close, vix_change_pct=vix_change_pct,
+                                 vxn_close=vxn_close, vxn_prev_close=vxn_prev_close, vxn_change_pct=vxn_change_pct):
                 for sym, chg in [('NQ', nq_change), ('ES', es_change), ('YM', ym_change), ('NK', nk_change)]:
                     print(f"  {sym}涨跌: {chg:+.2f}%" if chg is not None else f"  {sym}涨跌: N/A")
                 if nk_idx_change is not None:
@@ -2150,6 +2303,11 @@ def update_realtime():
                     print(f"  SENSEX: {sensex_idx_close:.0f} ({sensex_idx_change:+.2f}%)")
                 if sox_idx_change is not None:
                     print(f"  SOX半导体: {sox_idx_close:.1f} ({sox_idx_change:+.2f}%)")
+                if vix_change_pct is not None:
+                    print(f"  VIX恐慌: {vix_close:.2f} ({vix_change_pct:+.2f}%)")
+                if vxn_change_pct is not None:
+                    src = '(est)' if vxn.get('source') == 'estimated' else ''
+                    print(f"  VXN恐慌: {vxn_close:.2f} ({vxn_change_pct:+.2f}%) {src}")
                 print(f"期货数据: 已保存 (美股日: {us_date})")
             else:
                 print("期货数据: 保存失败")
@@ -2169,7 +2327,8 @@ def update_realtime():
                           ('DAX指数', backfill_dax_index_history),
                           ('CAC指数', backfill_cac_index_history),
                           ('SENSEX指数', backfill_sensex_index_history),
-                          ('SOX半导体', backfill_sox_index_history)]:
+                          ('SOX半导体', backfill_sox_index_history),
+                          ('VIX/VXN', backfill_vix_vxn_history)]:
             try:
                 n = fn(days=30)
                 if n:
