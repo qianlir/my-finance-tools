@@ -1501,15 +1501,27 @@ def update_subscription_status():
 
             status = 'unknown'
             limit_text = None
-            if '暂停申购' in text:
+            # 从"交易状态"区域提取，避免新闻标题中的关键词干扰
+            trade_section = ''
+            m_trade = re.search(r'交易状态[：:](.*?)(?:</div>|</td>)', text)
+            if m_trade:
+                trade_section = m_trade.group(1)
+
+            if '暂停申购' in trade_section:
                 status = 'closed'
-            elif '限大额' in text:
+            elif '限大额' in trade_section:
                 status = 'limited'
-                m = re.search(r'限大额.*?([\d,.]+万?)', text)
+                m = re.search(r'限大额.*?([\d,.]+万?元?)', trade_section)
                 if m:
                     limit_text = m.group(1)
-            elif '开放申购' in text:
+                m2 = re.search(r'上限([\d,.]+万?元?)', trade_section)
+                if m2 and not limit_text:
+                    limit_text = m2.group(1)
+            elif '开放申购' in trade_section or '正常申购' in trade_section:
                 status = 'open'
+            elif '暂停申购' in text and '限大额' not in text:
+                # fallback: 全文匹配但排除"限大额"（限大额≠暂停）
+                status = 'closed'
 
             conn = sqlite3.connect(DB_PATH)
             conn.execute("UPDATE fund_config SET subscription_status=?, subscription_limit=? WHERE code=?",
