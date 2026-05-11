@@ -56,6 +56,11 @@ def run_update():
             cwd=str(PROJECT_ROOT), timeout=120, check=True,
             capture_output=True
         )
+        subprocess.run(
+            [python_cmd, str(SCRIPT_DIR / "notify_top_change.py")],
+            cwd=str(PROJECT_ROOT), timeout=15, check=False,
+            capture_output=True
+        )
         print(f"[{ts}] Update OK", flush=True)
     except Exception as e:
         print(f"[{ts}] Update FAILED: {e}", flush=True)
