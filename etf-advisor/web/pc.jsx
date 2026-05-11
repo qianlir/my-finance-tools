@@ -150,7 +150,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
   if (selFund) {
     const fc = section.futures_correction;
     const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
-    const estNav = selFund.nav * r;
+    const estNav = selFund.estimated_nav || (selFund.nav * r);
     const holdings = selFund.holdings || [];
     const metrics = [
       ['净值', selFund.nav.toFixed(3), null],
@@ -323,7 +323,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
                   <td style={{ ...TDM, fontWeight: 500 }}>{e.price.toFixed(3)}</td>
                   <td style={{ ...TDM, color: 'var(--fg-3)' }}>{e.nav.toFixed(3)}</td>
                   <td style={TDM}>
-                    {(() => { const r = fc ? (1 + fc.ratio_pct / 100) : 1; const est = e.nav * r; return <span style={{ fontWeight: 500 }}>{est.toFixed(3)}</span>; })()}
+                    {(() => { const est = e.estimated_nav || e.nav * (fc ? (1 + fc.ratio_pct / 100) : 1); return <span style={{ fontWeight: 500 }}>{est.toFixed(3)}</span>; })()}
                   </td>
                   <td style={{ ...TDM, color: chg(e.change) }}>{fmtPct(e.change)}</td>
                   <td style={{ ...TDM, color: chg(e.display_premium), fontWeight: 500 }}>{fmtPct(e.display_premium)}</td>

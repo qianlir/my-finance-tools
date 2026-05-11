@@ -1019,6 +1019,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             'nav': nav,
             'nav_date': nav_date,      # 净值实际日期(美股收盘日)
             'nav_change': nav_change,   # 净值较前一日涨跌百分比
+            'estimated_nav': round(estimated_nav, 4) if estimated_nav else None,
             'display_premium': display_premium,
             'change': change,           # 涨幅使用价格变化（今天A股实际涨跌）
             'avg_by_period': avg_by_period,
@@ -1248,6 +1249,7 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "name": r['name'],
                 "price": round(r['price'], 3),
                 "nav": round(r.get('nav', 0), 3),
+                "estimated_nav": r.get('estimated_nav'),
                 "nav_change": round(r.get('nav_change', 0), 2),
                 "change": round(r['change'], 2),
                 "display_premium": round(r['display_premium'], 2),

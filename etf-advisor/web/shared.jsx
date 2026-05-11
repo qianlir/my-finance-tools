@@ -192,7 +192,7 @@ function FundDetailModal({ etf, section, onClose }) {
   if (!etf) return null;
   const fc = section?.futures_correction;
   const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
-  const estNav = etf.nav * r;
+  const estNav = etf.estimated_nav || (etf.nav * r);
   const holdings = etf.holdings || [];
   const rows = [
     ['价格', etf.price.toFixed(3), null],

@@ -109,7 +109,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
   if (selFund) {
     const fc = section.futures_correction;
     const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
-    const estNav = selFund.nav * r;
+    const estNav = selFund.estimated_nav || (selFund.nav * r);
     const holdings = selFund.holdings || [];
     const rows = [
       ['净值', selFund.nav.toFixed(3), null],
@@ -212,7 +212,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
         const isExp = expanded === e.code;
         const isTop = e.stars >= 4;
         const r = fc ? (1 + fc.ratio_pct / 100) : 1;
-        const estNav = e.nav * r;
+        const estNav = e.estimated_nav || (e.nav * r);
         return (
           <div key={e.code} onClick={() => setExpanded(isExp ? null : e.code)}
             style={{
