@@ -134,8 +134,8 @@ function PCRotation() {
     );
   }
 
-  // Trade table rows
-  var tradeRows = data.trades.map(function(t) {
+  // Trade table rows (newest first)
+  var tradeRows = data.trades.slice().reverse().map(function(t) {
     var isInit = t.action === '建仓';
     var leadColor = (t.lead || 0) > 0 ? '#2A6B4F' : (t.lead || 0) < 0 ? '#A8342A' : 'var(--fg-3)';
     return ce('tr', { key: t.seq, style: { background: isInit ? 'var(--ink-05)' : 'transparent' } },
@@ -245,8 +245,8 @@ function MobRotation() {
     );
   }
 
-  // Trade cards for mobile
-  var tradeCards = data.trades.map(function(t) {
+  // Trade cards for mobile (newest first)
+  var tradeCards = data.trades.slice().reverse().map(function(t) {
     var isInit = t.action === '建仓';
     var leadColor = (t.lead || 0) > 0 ? '#2A6B4F' : (t.lead || 0) < 0 ? '#A8342A' : 'var(--fg-3)';
     var buyShort = _rotEtfShort(t.buy_name);

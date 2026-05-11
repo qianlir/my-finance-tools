@@ -534,11 +534,27 @@ function FundDetailModal({
       fontSize: 12,
       color: c || 'var(--ink)'
     }
-  }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, v))), holdings.length > 0 && (() => {
+    const totalWeight = holdings.reduce((sum, h) => sum + (h.weight || 0), 0);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 16
+      }
+    }, totalWeight < 60 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 12px',
+        background: 'rgba(168,52,42,0.08)',
+        border: '1px solid rgba(168,52,42,0.2)',
+        borderRadius: 4,
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'var(--font-ui)',
+        fontSize: 11,
+        color: '#A8342A'
+      }
+    }, "⚠️ \u6301\u4ED3\u8986\u76D6\u7387\u4EC5 ", totalWeight.toFixed(0), "%\uFF0C\u4F30\u7B97\u51C0\u503C\u53EF\u80FD\u8BEF\u5DEE\u8F83\u5927")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: 'var(--font-ui)',
       fontSize: 11,
@@ -607,7 +623,8 @@ function FundDetailModal({
       fontSize: 11,
       color: chg(h.change_pct)
     }
-  }, h.change_pct != null ? fmtPct(h.change_pct) : '—')))))), /*#__PURE__*/React.createElement("div", {
+  }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
+  })(), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       marginTop: 16
@@ -1912,11 +1929,27 @@ function MobPremium({
         fontSize: 12,
         color: c || 'var(--ink)'
       }
-    }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 16
-      }
-    }, /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6"), holdings.map(h => /*#__PURE__*/React.createElement("div", {
+    }, v))), holdings.length > 0 && (() => {
+      const totalWeight = holdings.reduce((sum, h) => sum + (h.weight || 0), 0);
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 16
+        }
+      }, totalWeight < 60 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          padding: '8px 12px',
+          background: 'rgba(168,52,42,0.08)',
+          border: '1px solid rgba(168,52,42,0.2)',
+          borderRadius: 4,
+          marginBottom: 12
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'var(--font-ui)',
+          fontSize: 11,
+          color: '#A8342A'
+        }
+      }, "⚠️ \u6301\u4ED3\u8986\u76D6\u7387\u4EC5 ", totalWeight.toFixed(0), "%\uFF0C\u4F30\u7B97\u51C0\u503C\u53EF\u80FD\u8BEF\u5DEE\u8F83\u5927")), /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6"), holdings.map(h => /*#__PURE__*/React.createElement("div", {
       key: h.ticker,
       style: {
         display: 'flex',
@@ -1952,7 +1985,8 @@ function MobPremium({
         fontSize: 10,
         color: chg(h.change_pct)
       }
-    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—')))));
+    })())
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
