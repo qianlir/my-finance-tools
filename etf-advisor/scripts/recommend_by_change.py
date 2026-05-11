@@ -1161,8 +1161,8 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 score_for_rec = max(0, score_for_rec - adjustment)
             r['recommendation'] = get_recommendation_level(score_for_rec)
 
-    # LOF 套利标注
-    if index_type == 'LOF':
+    # LOF/OTHERS 套利标注 + 申购状态
+    if index_type in ('LOF', 'OTHERS'):
         for r in results:
             fc = _get_fund_config(r['code'])
             sub_status = fc.get('subscription_status', 'unknown') if fc else 'unknown'

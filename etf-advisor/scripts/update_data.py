@@ -1485,7 +1485,7 @@ def update_subscription_status():
     if last and last[0] == today:
         conn.close()
         return
-    lofs = conn.execute("SELECT code FROM fund_config WHERE category='LOF' AND enabled=1").fetchall()
+    lofs = conn.execute("SELECT code FROM fund_config WHERE category IN ('LOF','OTHERS') AND enabled=1").fetchall()
     conn.close()
     if not lofs:
         return
