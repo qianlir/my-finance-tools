@@ -115,6 +115,15 @@ INDEX_CONFIG = {
         'nav_label': '印股收盘',
         'use_index': True,
     },
+    'SOX': {
+        'symbol': 'SOX',
+        'close_col': 'sox_idx_close',
+        'prev_col': 'sox_idx_prev_close',
+        'change_col': 'sox_idx_change_pct',
+        'name_cn': '半导体SOX',
+        'nav_label': '美股收盘',
+        'use_index': True,
+    },
     'OTHERS': {
         'symbol': '',
         'name_cn': '其他',
@@ -163,6 +172,7 @@ ETF_CONFIG = [
     {'code': '159529', 'name': '标普消费ETF', 'index': 'OTHERS'},
     {'code': '513290', 'name': '美国生物ETF', 'index': 'OTHERS'},
     {'code': '513080', 'name': '法国CAC40ETF', 'index': 'OTHERS'},
+    {'code': '501225', 'name': '全球芯片LOF', 'index': 'OTHERS'},
     # LOF
     {'code': '501312', 'name': '海外科技LOF', 'index': 'LOF'},
     {'code': '162415', 'name': '美国消费LOF', 'index': 'LOF'},
@@ -177,6 +187,9 @@ ETF_CONFIG = [
     {'code': '160723', 'name': '嘉实原油LOF', 'index': 'LOF'},
     {'code': '161129', 'name': '易方达原油LOF', 'index': 'LOF'},
     {'code': '160216', 'name': '国泰商品LOF', 'index': 'LOF'},
+    {'code': '161715', 'name': '招商大宗商品LOF', 'index': 'LOF'},
+    {'code': '161810', 'name': '银华内需LOF', 'index': 'LOF'},
+    {'code': '160644', 'name': '港美互联网LOF', 'index': 'LOF'},
 ]
 
 EXCLUDED_CODES = []
@@ -970,6 +983,17 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 from update_data import estimate_nav_by_holdings
                 estimated_nav, _est_chg = estimate_nav_by_holdings(code, nav)
                 display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+            elif _fc and _fc['estimate_method'] == 'fundgz' and nav:
+                # A 股 LOF：用东方财富 fundgz API 获取盘中估值
+                import sys; sys.path.insert(0, str(SCRIPT_DIR))
+                from update_data import get_fundgz_nav
+                gz = get_fundgz_nav(code)
+                if gz and gz.get('estimated_nav'):
+                    estimated_nav = gz['estimated_nav']
+                    display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+                else:
+                    estimated_nav = nav
+                    display_premium = current.get('premium_rate', 0)
             elif _fc and _fc['estimate_method'] == 'futures' and _fc.get('estimate_symbol') and nav:
                 # OTHERS/LOF 中的期货型（如道琼斯、黄金、原油）
                 _sym = _fc['estimate_symbol']

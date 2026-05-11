@@ -78,6 +78,10 @@ ETF_LIST = [
     {'code': '160723', 'name': '嘉实原油LOF', 'company': '嘉实基金', 'market': 'sz', 'index': 'LOF'},
     {'code': '161129', 'name': '易方达原油LOF', 'company': '易方达', 'market': 'sz', 'index': 'LOF'},
     {'code': '160216', 'name': '国泰商品LOF', 'company': '国泰基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161715', 'name': '招商大宗商品LOF', 'company': '招商基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161810', 'name': '银华内需LOF', 'company': '银华基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '160644', 'name': '港美互联网LOF', 'company': '景顺长城', 'market': 'sz', 'index': 'LOF'},
+    {'code': '501225', 'name': '全球芯片LOF', 'company': '景顺长城', 'market': 'sh', 'index': 'OTHERS'},
 ]
 
 
@@ -273,6 +277,49 @@ def get_current_nav_with_date(code):
     return None
 
 
+def get_fundgz_nav(code):
+    """从东方财富 fundgz API 获取盘中估值（A 股基金实时估算净值）
+
+    返回: {'estimated_nav': float, 'change_pct': float} 或 None
+    仅在 A 股交易时段有效，盘后返回最后一次估值。
+    """
+    import re as _re
+    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
+
+    # 尝试 requests
+    try:
+        resp = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fund.eastmoney.com/'
+        }, timeout=8)
+        m = _re.search(r'jsonpgz\((.+)\)', resp.text)
+        if m:
+            data = json.loads(m.group(1))
+            gsz = float(data.get('gsz', 0))
+            gszzl = float(data.get('gszzl', 0))
+            if gsz > 0:
+                return {'estimated_nav': gsz, 'change_pct': gszzl}
+    except Exception:
+        pass
+
+    # fallback: curl
+    try:
+        import subprocess as _sp
+        r = _sp.run(['curl', '-s', '--noproxy', '*', '--max-time', '8', url],
+                     capture_output=True, text=True, timeout=12)
+        if r.returncode == 0 and r.stdout.strip():
+            m = _re.search(r'jsonpgz\((.+)\)', r.stdout)
+            if m:
+                data = json.loads(m.group(1))
+                gsz = float(data.get('gsz', 0))
+                gszzl = float(data.get('gszzl', 0))
+                if gsz > 0:
+                    return {'estimated_nav': gsz, 'change_pct': gszzl}
+    except Exception:
+        pass
+
+    return None
+
+
 def get_latest_nav_from_db(code):
     """从数据库获取最近的NAV"""
     try:
@@ -419,10 +466,15 @@ def get_realtime_futures():
     if cac_idx:
         futures_data['CAC_IDX'] = cac_idx
 
-    # 印度SENSEX指数（东方财富 + 新浪 b_SENSEX fallback）
+    # 印度SENSEE指数（东方财富 + 新浪 b_SENSEX fallback）
     sensex_idx = get_sensex_index_realtime()
     if sensex_idx:
         futures_data['SENSEX_IDX'] = sensex_idx
+
+    # SOX 半导体指数（新浪 gb_$sox，美股格式）
+    sox_data = _get_sox_realtime()
+    if sox_data:
+        futures_data['SOX_IDX'] = sox_data
 
     return futures_data
 
@@ -713,6 +765,29 @@ def _sensex_idx_from_sina():
     except Exception:
         pass
     return None
+
+
+def _get_sox_realtime():
+    """获取SOX半导体指数实时数据（新浪 gb_$sox，美股行情格式）"""
+    try:
+        url = 'https://hq.sinajs.cn/list=gb_$sox'
+        resp = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.sina.com.cn'
+        }, timeout=10)
+        resp.encoding = 'gbk'
+        m = re.search(r'"([^"]+)"', resp.text)
+        if not m:
+            return None
+        f = m.group(1).split(',')
+        if len(f) < 27 or not f[1]:
+            return None
+        price = float(f[1])
+        prev_close = float(f[26]) if f[26] else price
+        change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+        return {'price': price, 'prev_close': prev_close, 'change_pct': change_pct, 'source': 'sina_gb_sox'}
+    except Exception:
+        return None
 
 
 def get_futures_history_from_sina(symbol):
@@ -1007,6 +1082,67 @@ def backfill_sensex_index_history(days=30):
     return updated
 
 
+def backfill_sox_index_history(days=30):
+    """回补SOX半导体指数历史数据到 futures_data
+
+    数据源优先级:
+    1. 东方财富 SOXX ETF K线 (SOX 指数无直接API，用 SOXX ETF 近似)
+    2. NQ 比率推算 (fallback)
+
+    注: SOX 与 SOXX 高度相关（相关系数 > 0.99），用 SOXX 的涨跌率反推 SOX
+    """
+    # 用当前 SOX 实时价格作为锚点，回推历史
+    sox_current = _get_sox_realtime()
+    if not sox_current:
+        return 0
+
+    sox_price_today = sox_current['price']
+    sox_prev_today = sox_current.get('prev_close')
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # 获取有 NQ 数据但没有 SOX 数据的日期
+    cursor.execute("""
+        SELECT date, nq_close, nq_prev_close FROM futures_data
+        WHERE nq_close IS NOT NULL AND (sox_idx_close IS NULL OR sox_idx_close = 0)
+        ORDER BY date DESC LIMIT ?
+    """, (days + 5,))
+
+    rows = cursor.fetchall()
+    if not rows:
+        conn.close()
+        return 0
+
+    # 获取最新 NQ 作为锚点比率
+    cursor.execute("SELECT nq_close FROM futures_data WHERE nq_close IS NOT NULL ORDER BY date DESC LIMIT 1")
+    nq_latest = cursor.fetchone()
+    if not nq_latest:
+        conn.close()
+        return 0
+
+    nq_latest_close = nq_latest[0]
+    sox_nq_ratio = sox_price_today / nq_latest_close
+
+    updated = 0
+    for row in rows:
+        date_str, nq_close, nq_prev = row
+        est_sox = nq_close * sox_nq_ratio
+        est_sox_prev = nq_prev * sox_nq_ratio if nq_prev else None
+
+        cursor.execute("""
+            UPDATE futures_data
+            SET sox_idx_close = COALESCE(sox_idx_close, ?),
+                sox_idx_prev_close = COALESCE(sox_idx_prev_close, ?)
+            WHERE date = ?
+        """, (est_sox, est_sox_prev, date_str))
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    return updated
+
+
 def save_futures_data(date, nq_change, es_change, ym_change=None,
                       nq_close=None, es_close=None, ym_close=None,
                       nq_prev_close=None, es_prev_close=None, ym_prev_close=None,
@@ -1017,7 +1153,8 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                       gc_close=None, gc_prev_close=None, gc_change=None, gc_source='sina',
                       cl_close=None, cl_prev_close=None, cl_change=None, cl_source='sina',
                       cac_idx_close=None, cac_idx_prev_close=None, cac_idx_change=None,
-                      sensex_idx_close=None, sensex_idx_prev_close=None, sensex_idx_change=None):
+                      sensex_idx_close=None, sensex_idx_prev_close=None, sensex_idx_change=None,
+                      sox_idx_close=None, sox_idx_prev_close=None, sox_idx_change=None):
     """保存期货数据到数据库（NQ/ES/YM/NK/GC/CL期货用 INSERT OR REPLACE）"""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -1075,6 +1212,14 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                     sensex_idx_change_pct = COALESCE(sensex_idx_change_pct, ?)
                 WHERE date = ?
             """, (sensex_idx_close, sensex_idx_prev_close, sensex_idx_change, date))
+        if sox_idx_close is not None:
+            cursor.execute("""
+                UPDATE futures_data
+                SET sox_idx_close = COALESCE(sox_idx_close, ?),
+                    sox_idx_prev_close = COALESCE(sox_idx_prev_close, ?),
+                    sox_idx_change_pct = COALESCE(sox_idx_change_pct, ?)
+                WHERE date = ?
+            """, (sox_idx_close, sox_idx_prev_close, sox_idx_change, date))
 
         conn.commit()
         conn.close()
@@ -1204,8 +1349,52 @@ def save_stock_prices(prices):
     conn.close()
 
 
+def _is_hk_ticker(ticker):
+    """判断是否为港股代码（5位纯数字，如 00700/09988/00883）"""
+    return len(ticker) == 5 and ticker.isdigit()
+
+
+def fetch_hk_stock_prices(tickers):
+    """新浪批量获取港股价格
+    返回: {'00700': {'price': 465.0, 'prev_close': 471.4, 'change_pct': -1.36}, ...}
+    """
+    if not tickers:
+        return {}
+    symbols = ','.join(f'rt_hk{t}' for t in tickers)
+    try:
+        resp = requests.get(f'https://hq.sinajs.cn/list={symbols}', headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.sina.com.cn'
+        }, timeout=15)
+        resp.encoding = 'gbk'
+
+        result = {}
+        for line in resp.text.strip().split('\n'):
+            m = re.search(r'rt_hk(\d+)="([^"]+)"', line)
+            if not m:
+                continue
+            code = m.group(1)
+            f = m.group(2).split(',')
+            if len(f) < 10 or not f[6]:
+                continue
+            try:
+                price = float(f[6])
+                prev_close = float(f[3]) if f[3] else price
+                change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+                result[code] = {
+                    'price': price, 'prev_close': prev_close,
+                    'after_hours': 0, 'change_pct': change_pct
+                }
+            except (ValueError, ZeroDivisionError):
+                continue
+        return result
+    except Exception as e:
+        print(f"  获取港股价格失败: {e}")
+        return {}
+
+
 def update_all_holdings_prices():
-    """更新所有 holdings 型基金的持仓股票价格"""
+    """更新所有 holdings 型基金的持仓股票价格（美股 + 港股）"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -1218,22 +1407,37 @@ def update_all_holdings_prices():
         conn.close()
         return
 
-    # 收集所有唯一的 ticker
-    all_tickers = set()
+    # 收集所有唯一的 ticker，分 US / HK
+    us_tickers = set()
+    hk_tickers = set()
     for f in holdings_funds:
         rows = conn.execute("SELECT ticker FROM fund_holdings WHERE fund_code=?", (f['code'],)).fetchall()
         for r in rows:
-            all_tickers.add(r['ticker'])
+            t = r['ticker']
+            if _is_hk_ticker(t):
+                hk_tickers.add(t)
+            else:
+                us_tickers.add(t)
     conn.close()
 
-    if not all_tickers:
-        return
+    all_prices = {}
 
-    # 批量获取价格
-    prices = fetch_us_stock_prices(list(all_tickers))
-    if prices:
-        save_stock_prices(prices)
-        print(f"  美股价格: 更新 {len(prices)} 只 ({', '.join(list(prices.keys())[:5])}...)")
+    # 美股
+    if us_tickers:
+        prices = fetch_us_stock_prices(list(us_tickers))
+        if prices:
+            all_prices.update(prices)
+            print(f"  美股价格: 更新 {len(prices)} 只 ({', '.join(list(prices.keys())[:5])}...)")
+
+    # 港股
+    if hk_tickers:
+        prices = fetch_hk_stock_prices(list(hk_tickers))
+        if prices:
+            all_prices.update(prices)
+            print(f"  港股价格: 更新 {len(prices)} 只 ({', '.join(list(prices.keys())[:5])}...)")
+
+    if all_prices:
+        save_stock_prices(all_prices)
 
 
 def estimate_nav_by_holdings(fund_code, confirmed_nav):
@@ -1439,6 +1643,13 @@ def init_database():
     # 添加 CAC40 + SENSEX 指数字段
     for col in ['cac_idx_close', 'cac_idx_prev_close', 'cac_idx_change_pct',
                 'sensex_idx_close', 'sensex_idx_prev_close', 'sensex_idx_change_pct']:
+        try:
+            cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
+        except Exception:
+            pass
+
+    # 添加 SOX 半导体指数字段
+    for col in ['sox_idx_close', 'sox_idx_prev_close', 'sox_idx_change_pct']:
         try:
             cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
         except Exception:
@@ -1853,6 +2064,10 @@ def update_realtime():
         sensex_idx_close = sensex_idx.get('price')
         sensex_idx_prev_close = sensex_idx.get('prev_close')
         sensex_idx_change = sensex_idx.get('change_pct')
+        sox_idx = futures.get('SOX_IDX', {})
+        sox_idx_close = sox_idx.get('price')
+        sox_idx_prev_close = sox_idx.get('prev_close')
+        sox_idx_change = sox_idx.get('change_pct')
 
         if nq_change is not None or es_change is not None or ym_change is not None or nk_change is not None:
             us_date = get_us_trading_date()
@@ -1870,7 +2085,9 @@ def update_realtime():
                                  cac_idx_close=cac_idx_close, cac_idx_prev_close=cac_idx_prev_close,
                                  cac_idx_change=cac_idx_change,
                                  sensex_idx_close=sensex_idx_close, sensex_idx_prev_close=sensex_idx_prev_close,
-                                 sensex_idx_change=sensex_idx_change):
+                                 sensex_idx_change=sensex_idx_change,
+                                 sox_idx_close=sox_idx_close, sox_idx_prev_close=sox_idx_prev_close,
+                                 sox_idx_change=sox_idx_change):
                 for sym, chg in [('NQ', nq_change), ('ES', es_change), ('YM', ym_change), ('NK', nk_change)]:
                     print(f"  {sym}涨跌: {chg:+.2f}%" if chg is not None else f"  {sym}涨跌: N/A")
                 if nk_idx_change is not None:
@@ -1885,6 +2102,8 @@ def update_realtime():
                     print(f"  CAC40: {cac_idx_close:.0f} ({cac_idx_change:+.2f}%)")
                 if sensex_idx_change is not None:
                     print(f"  SENSEX: {sensex_idx_close:.0f} ({sensex_idx_change:+.2f}%)")
+                if sox_idx_change is not None:
+                    print(f"  SOX半导体: {sox_idx_close:.1f} ({sox_idx_change:+.2f}%)")
                 print(f"期货数据: 已保存 (美股日: {us_date})")
             else:
                 print("期货数据: 保存失败")
@@ -1903,7 +2122,8 @@ def update_realtime():
         for name, fn in [('日经指数', backfill_nikkei_index_history),
                           ('DAX指数', backfill_dax_index_history),
                           ('CAC指数', backfill_cac_index_history),
-                          ('SENSEX指数', backfill_sensex_index_history)]:
+                          ('SENSEX指数', backfill_sensex_index_history),
+                          ('SOX半导体', backfill_sox_index_history)]:
             try:
                 n = fn(days=30)
                 if n:

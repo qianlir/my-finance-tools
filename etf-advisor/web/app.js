@@ -437,8 +437,9 @@ function FundDetailModal({
   const fc = section?.futures_correction;
   const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
   const estNav = etf.estimated_nav || etf.nav * r;
+  const estChg = fc?.ratio_pct ?? (etf.nav ? (estNav / etf.nav - 1) * 100 : 0);
   const holdings = etf.holdings || [];
-  const rows = [['价格', etf.price.toFixed(3), null], ['净值', etf.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(etf.change), chg(etf.change)], ['估算溢价', fmtPct(etf.display_premium), chg(etf.display_premium)], ['3M超额(均值)', fmtPct(etf.excess_3m) + ' (' + fmtPct(etf.avg_3m) + ')', chg(etf.excess_3m)], ['6M超额(均值)', fmtPct(etf.excess_6m) + ' (' + fmtPct(etf.avg_6m) + ')', chg(etf.excess_6m)], ['1Y超额(均值)', fmtPct(etf.excess_1y) + ' (' + fmtPct(etf.avg_1y) + ')', chg(etf.excess_1y)], ['综合超额', fmtPct(etf.composite), chg(etf.composite)], ['年净值涨幅', fmtPct(etf.nav_return_1y), chg(etf.nav_return_1y)], ['年价格涨幅', fmtPct(etf.price_return_1y), chg(etf.price_return_1y)], ['>7%天数', String(etf.days_gt7), etf.days_gt7 > 30 ? '#A8342A' : null], ['分值', etf.score.toFixed(2), null]];
+  const rows = [['价格', etf.price.toFixed(3), null], ['净值', etf.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(estChg)], ['涨幅', fmtPct(etf.change), chg(etf.change)], ['估算溢价', fmtPct(etf.display_premium), chg(etf.display_premium)], ['3M超额(均值)', fmtPct(etf.excess_3m) + ' (' + fmtPct(etf.avg_3m) + ')', chg(etf.excess_3m)], ['6M超额(均值)', fmtPct(etf.excess_6m) + ' (' + fmtPct(etf.avg_6m) + ')', chg(etf.excess_6m)], ['1Y超额(均值)', fmtPct(etf.excess_1y) + ' (' + fmtPct(etf.avg_1y) + ')', chg(etf.excess_1y)], ['综合超额', fmtPct(etf.composite), chg(etf.composite)], ['年净值涨幅', fmtPct(etf.nav_return_1y), chg(etf.nav_return_1y)], ['年价格涨幅', fmtPct(etf.price_return_1y), chg(etf.price_return_1y)], ['>7%天数', String(etf.days_gt7), etf.days_gt7 > 30 ? '#A8342A' : null], ['分值', etf.score.toFixed(2), null]];
   return /*#__PURE__*/React.createElement("div", {
     onClick: onClose,
     style: {
@@ -1072,8 +1073,9 @@ function PCPremium({
     const fc = section.futures_correction;
     const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
     const estNav = selFund.estimated_nav || selFund.nav * r;
+    const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
     const holdings = selFund.holdings || [];
-    const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
+    const metrics = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(estChg)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
     if (selFund.subscription_status) {
       const subMap = {
         closed: '暂停申购',
@@ -1827,8 +1829,9 @@ function MobPremium({
     const fc = section.futures_correction;
     const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
     const estNav = selFund.estimated_nav || selFund.nav * r;
+    const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
     const holdings = selFund.holdings || [];
-    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
+    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(estChg)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
     if (selFund.subscription_status) {
       var subMap = {
         closed: '暂停申购',
@@ -2061,6 +2064,7 @@ function MobPremium({
     const isTop = e.stars >= 4;
     const r = fc ? 1 + fc.ratio_pct / 100 : 1;
     const estNav = e.estimated_nav || e.nav * r;
+    const estChg = fc?.ratio_pct ?? (e.nav ? (estNav / e.nav - 1) * 100 : 0);
     return /*#__PURE__*/React.createElement("div", {
       key: e.code,
       onClick: () => setExpanded(isExp ? null : e.code),
@@ -2189,7 +2193,7 @@ function MobPremium({
         background: 'var(--ink-05)',
         borderRadius: 2
       }
-    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(fc?.ratio_pct) + ')', chg(fc?.ratio_pct)], ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M均溢价', fmtPct(e.avg_3m), null], ['6M均溢价', fmtPct(e.avg_6m), null], ['1Y均溢价', fmtPct(e.avg_1y), null], ['溢价>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(estChg) + ')', chg(estChg)], ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M均溢价', fmtPct(e.avg_3m), null], ['6M均溢价', fmtPct(e.avg_6m), null], ['1Y均溢价', fmtPct(e.avg_1y), null], ['溢价>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
       key: l,
       style: {
         display: 'flex',

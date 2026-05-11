@@ -193,11 +193,12 @@ function FundDetailModal({ etf, section, onClose }) {
   const fc = section?.futures_correction;
   const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
   const estNav = etf.estimated_nav || (etf.nav * r);
+  const estChg = fc?.ratio_pct ?? (etf.nav ? (estNav / etf.nav - 1) * 100 : 0);
   const holdings = etf.holdings || [];
   const rows = [
     ['价格', etf.price.toFixed(3), null],
     ['净值', etf.nav.toFixed(3), null],
-    ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
+    ['估算净值', estNav.toFixed(3), chg(estChg)],
     ['涨幅', fmtPct(etf.change), chg(etf.change)],
     ['估算溢价', fmtPct(etf.display_premium), chg(etf.display_premium)],
     ['3M超额(均值)', fmtPct(etf.excess_3m) + ' (' + fmtPct(etf.avg_3m) + ')', chg(etf.excess_3m)],

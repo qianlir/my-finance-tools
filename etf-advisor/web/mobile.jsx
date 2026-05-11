@@ -110,10 +110,11 @@ function MobPremium({ activeIdx, setActiveIdx }) {
     const fc = section.futures_correction;
     const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
     const estNav = selFund.estimated_nav || (selFund.nav * r);
+    const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
     const holdings = selFund.holdings || [];
     const rows = [
       ['净值', selFund.nav.toFixed(3), null],
-      ['估算净值', estNav.toFixed(3), chg(fc?.ratio_pct)],
+      ['估算净值', estNav.toFixed(3), chg(estChg)],
       ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
       ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
       ['3M均溢价', fmtPct(selFund.avg_3m), null],
@@ -213,6 +214,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
         const isTop = e.stars >= 4;
         const r = fc ? (1 + fc.ratio_pct / 100) : 1;
         const estNav = e.estimated_nav || (e.nav * r);
+        const estChg = fc?.ratio_pct ?? (e.nav ? (estNav / e.nav - 1) * 100 : 0);
         return (
           <div key={e.code} onClick={() => setExpanded(isExp ? null : e.code)}
             style={{
@@ -257,7 +259,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
               <div style={{ marginTop: 12, padding: '12px', background: 'var(--ink-05)', borderRadius: 2 }}>
                 {[
                   ['净值', e.nav.toFixed(3), null],
-                  ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(fc?.ratio_pct) + ')', chg(fc?.ratio_pct)],
+                  ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(estChg) + ')', chg(estChg)],
                   ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)],
                   ['3M均溢价', fmtPct(e.avg_3m), null],
                   ['6M均溢价', fmtPct(e.avg_6m), null],
