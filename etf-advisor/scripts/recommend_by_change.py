@@ -908,6 +908,42 @@ def calculate_excess_premium(display_premium: float, hist_avg_premium: float) ->
     return display_premium - hist_avg_premium
 
 
+def _calc_fear_index_bonus(index_type: str) -> float:
+    """恐慌指数加分：纳指用VXN，标普用VIX
+    公式: (1Y均值 - 当前值) × 0.1
+    恐慌低于均值 → 正分（市场冷静，加分）
+    恐慌高于均值 → 负分（市场恐慌，减分）
+    """
+    # 纳指用VXN，标普用VIX，其他不加
+    col_map = {'NASDAQ': ('vxn_close', 'VXN'), 'SP500': ('vix_close', 'VIX')}
+    if index_type not in col_map:
+        return 0
+
+    close_col, name = col_map[index_type]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 当前值
+    current = cursor.execute(
+        f"SELECT {close_col} FROM futures_data WHERE {close_col} IS NOT NULL ORDER BY date DESC LIMIT 1"
+    ).fetchone()
+    if not current or not current[0]:
+        conn.close()
+        return 0
+    current_val = current[0]
+
+    # 1Y均值（约250个交易日）
+    avg = cursor.execute(
+        f"SELECT AVG({close_col}) FROM futures_data WHERE {close_col} IS NOT NULL AND date >= date('now', '-365 days')"
+    ).fetchone()
+    conn.close()
+
+    if not avg or not avg[0]:
+        return 0
+
+    return (avg[0] - current_val) * 0.10
+
+
 def get_recommendation_level(score: float) -> str:
     """根据分值计算推荐程度
     分值越高=越推荐买入，分值越低=越推荐卖出
@@ -1143,6 +1179,13 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
         r['rotation_pool'] = etf_pool_cfg is not None
         r['rotation_bonus'] = etf_pool_cfg['bonus'] if etf_pool_cfg else pool_cfg.get('default_bonus', 0)
         r['score'] += r['rotation_bonus']
+
+    # 恐慌指数加分：纳指用VXN，标普用VIX
+    _fear_bonus = _calc_fear_index_bonus(index_type)
+    if _fear_bonus != 0:
+        for r in results:
+            r['score'] += _fear_bonus
+            r['fear_bonus'] = _fear_bonus
 
     # === 推荐等级（按 sub_category 分组归一化）===
     results.sort(key=lambda x: x['score'], reverse=True)
