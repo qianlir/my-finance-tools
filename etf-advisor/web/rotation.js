@@ -43,6 +43,17 @@ function _rotRenderChart(canvasId, data) {
           tension: 0.1,
         },
         {
+          label: '最低溢价',
+          data: d.min_premium_values || [],
+          borderColor: '#2a6b4f',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          fill: false,
+          pointRadius: 0,
+          pointHitRadius: 8,
+          tension: 0.1,
+        },
+        {
           label: '等权持有',
           data: d.equal_weight_values,
           borderColor: '#8b6914',
@@ -75,13 +86,15 @@ function _rotRenderChart(canvasId, data) {
             label: function(item) {
               var val = item.raw;
               var ret = ((val / data.initial_value - 1) * 100).toFixed(2);
-              var prefix = item.datasetIndex === 0 ? '轮动' : '等权';
-              return prefix + ': ¥' + Math.round(val).toLocaleString() + ' (' + (ret > 0 ? '+' : '') + ret + '%)';
+              var labels = ['轮动', '最低溢价', '等权'];
+              return labels[item.datasetIndex] + ': ¥' + Math.round(val).toLocaleString() + ' (' + (ret > 0 ? '+' : '') + ret + '%)';
             },
             afterBody: function(items) {
               var idx = items[0].dataIndex;
               var lead = d.rotation_values[idx] - d.equal_weight_values[idx];
-              return '领先: ' + (lead > 0 ? '+' : '') + '¥' + Math.round(lead).toLocaleString();
+              var mpVals = d.min_premium_values || [];
+              var mpLead = mpVals.length ? d.rotation_values[idx] - (mpVals[idx] || data.initial_value) : 0;
+              return 'vs等权: ' + (lead > 0 ? '+' : '') + '¥' + Math.round(lead).toLocaleString() + '\nvs最低溢价: ' + (mpLead > 0 ? '+' : '') + '¥' + Math.round(mpLead).toLocaleString();
             }
           }
         }
@@ -148,9 +161,10 @@ function PCRotation() {
       ce('td', { style: { fontFamily: 'var(--font-mono)' } }, _rotFmtScore(t.buy_score)),
       ce('td', { style: { fontFamily: 'var(--font-mono)', color: (t.score_diff || 0) > 0 ? '#2A6B4F' : 'var(--fg-3)' } },
         t.score_diff != null ? (t.score_diff > 0 ? '+' : '') + t.score_diff.toFixed(2) : '—'),
-      ce('td', { style: { fontFamily: 'var(--font-mono)' } }, _rotFmtMoney(t.rotation_value)),
-      ce('td', { style: { fontFamily: 'var(--font-mono)' } }, _rotFmtMoney(t.equal_weight_value)),
-      ce('td', { style: { fontFamily: 'var(--font-mono)', color: leadColor } },
+      ce('td', { style: { fontFamily: 'var(--font-mono)', textAlign: 'right' } }, _rotFmtMoney(t.rotation_value)),
+      ce('td', { style: { fontFamily: 'var(--font-mono)', textAlign: 'right' } }, _rotFmtMoney(t.min_premium_value)),
+      ce('td', { style: { fontFamily: 'var(--font-mono)', textAlign: 'right' } }, _rotFmtMoney(t.equal_weight_value)),
+      ce('td', { style: { fontFamily: 'var(--font-mono)', textAlign: 'right', color: leadColor } },
         t.lead != null ? (t.lead > 0 ? '+' : '') + _rotFmtMoney(t.lead) : '—')
     );
   });
@@ -167,12 +181,14 @@ function PCRotation() {
     ),
 
     // Metrics grid
-    ce('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 } },
+    ce('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 } },
       mc('轮动市值', _rotFmtMoney(s.rotation_value), 'red'),
       mc('轮动收益', _rotFmtPct(s.rotation_return), 'red'),
+      mc('最低溢价市值', _rotFmtMoney(s.min_premium_value)),
+      mc('最低溢价收益', _rotFmtPct(s.min_premium_return)),
       mc('等权市值', _rotFmtMoney(s.equal_weight_value)),
       mc('等权收益 (' + data.equal_weight_etfs + '只)', _rotFmtPct(s.equal_weight_return)),
-      mc('Alpha', _rotFmtPct(s.alpha), 'green'),
+      mc('Alpha(轮动-等权)', _rotFmtPct(s.alpha), 'green'),
       mc('切换次数', String(s.trade_count))
     ),
 
@@ -184,6 +200,10 @@ function PCRotation() {
           ce('span', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
             ce('span', { style: { display: 'inline-block', width: 16, height: 2.5, background: '#a8342a', borderRadius: 1 } }),
             '轮动策略'
+          ),
+          ce('span', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
+            ce('span', { style: { display: 'inline-block', width: 16, height: 0, borderTop: '2px dashed #2a6b4f' } }),
+            '最低溢价'
           ),
           ce('span', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
             ce('span', { style: { display: 'inline-block', width: 16, height: 0, borderTop: '2px dashed #8b6914' } }),
@@ -208,6 +228,7 @@ function PCRotation() {
           ce('th', thStyle, '买入分值'),
           ce('th', thStyle, '分差'),
           ce('th', thStyle, '策略市值'),
+          ce('th', thStyle, '最低溢价'),
           ce('th', thStyle, '等权市值'),
           ce('th', thStyle, '领先')
         )
@@ -283,6 +304,7 @@ function MobRotation() {
       // Row 3: portfolio values
       ce('div', { style: { display: 'flex', gap: 12, marginTop: 3, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' } },
         ce('span', null, '轮动 ' + _rotFmtMoney(t.rotation_value)),
+        ce('span', null, '最低溢价 ' + _rotFmtMoney(t.min_premium_value)),
         ce('span', null, '等权 ' + _rotFmtMoney(t.equal_weight_value))
       )
     );
@@ -298,9 +320,11 @@ function MobRotation() {
     ce('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 } },
       mc('轮动市值', _rotFmtMoney(s.rotation_value), 'red'),
       mc('轮动收益', _rotFmtPct(s.rotation_return), 'red'),
+      mc('最低溢价市值', _rotFmtMoney(s.min_premium_value)),
+      mc('最低溢价收益', _rotFmtPct(s.min_premium_return)),
       mc('等权市值', _rotFmtMoney(s.equal_weight_value)),
       mc('等权收益', _rotFmtPct(s.equal_weight_return)),
-      mc('Alpha', _rotFmtPct(s.alpha), 'green'),
+      mc('Alpha(轮动-等权)', _rotFmtPct(s.alpha), 'green'),
       mc('切换次数', String(s.trade_count))
     ),
 

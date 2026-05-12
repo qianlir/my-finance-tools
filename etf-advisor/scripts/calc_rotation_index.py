@@ -369,6 +369,67 @@ def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIA
     return result_rows, trades
 
 
+def simulate_min_premium(conn, dates, initial=INITIAL_VALUE):
+    """模拟最低溢价策略：每天持有溢价最低的ETF（全部纳指ETF，不限pool）。"""
+    rows = conn.execute("""
+        SELECT date, code, price, premium_rate
+        FROM etf_data
+        WHERE code IN ({}) AND date IN ({}) AND price IS NOT NULL AND price > 0
+        ORDER BY date, code
+    """.format(
+        ','.join('?' * len(ALL_CODES)),
+        ','.join('?' * len(dates))
+    ), ALL_CODES + list(dates)).fetchall()
+
+    by_date = defaultdict(list)
+    for r in rows:
+        by_date[r['date']].append({
+            'code': r['code'],
+            'price': r['price'],
+            'premium_rate': r['premium_rate'],
+        })
+
+    holding_code = None
+    shares = 0.0
+    result = {}  # date -> value
+
+    for date in dates:
+        day_etfs = by_date.get(date, [])
+        if not day_etfs:
+            continue
+
+        # Find lowest premium
+        candidates = [(e['premium_rate'], e) for e in day_etfs if e['premium_rate'] is not None]
+        if not candidates:
+            continue
+        candidates.sort(key=lambda x: x[0])
+        lowest = candidates[0][1]
+
+        if holding_code is None:
+            holding_code = lowest['code']
+            shares = initial / lowest['price']
+            result[date] = initial
+            continue
+
+        # Current value with held ETF
+        held = next((e for e in day_etfs if e['code'] == holding_code), None)
+        if held is None:
+            continue
+
+        current_value = shares * held['price']
+
+        # Switch to lowest premium
+        if lowest['code'] != holding_code:
+            cash = current_value
+            holding_code = lowest['code']
+            shares = cash / lowest['price']
+            current_value = cash
+
+        result[date] = round(current_value, 2)
+
+    return result
+
+
 def compute_equal_weight(conn, dates):
     """计算等权基准: 所有纳指ETF，buy-and-hold 不再平衡。"""
     if not dates:
@@ -425,12 +486,23 @@ def generate_json(conn, strategy_name, threshold, pool_codes, pool_cfg, trades, 
     equal_weight_values = [r['equal_weight_value'] for r in rows]
     holdings = [r['holding_code'] for r in rows]
 
+    # Compute min-premium strategy
+    print("  Computing min-premium strategy...")
+    mp_values_map = simulate_min_premium(conn, dates)
+    min_premium_values = [mp_values_map.get(d, INITIAL_VALUE) for d in dates]
+
     final_rv = rotation_values[-1]
     final_ev = equal_weight_values[-1]
+    final_mp = min_premium_values[-1] if min_premium_values else INITIAL_VALUE
     rotation_return = (final_rv / INITIAL_VALUE - 1) * 100
     equal_weight_return = (final_ev / INITIAL_VALUE - 1) * 100
+    min_premium_return = (final_mp / INITIAL_VALUE - 1) * 100
 
     pool_names = {code: CODE_TO_NAME.get(code, code) for code in pool_codes}
+
+    # Attach min_premium_value to each trade
+    for t in trades:
+        t['min_premium_value'] = round(mp_values_map.get(t['date'], INITIAL_VALUE), 2)
 
     data = {
         'strategy': strategy_name,
@@ -449,6 +521,8 @@ def generate_json(conn, strategy_name, threshold, pool_codes, pool_cfg, trades, 
             'equal_weight_value': round(final_ev, 2),
             'equal_weight_return': round(equal_weight_return, 2),
             'alpha': round(rotation_return - equal_weight_return, 2),
+            'min_premium_value': round(final_mp, 2),
+            'min_premium_return': round(min_premium_return, 2),
             'trade_count': len(trades),
             'current_holding': holdings[-1],
             'current_holding_name': CODE_TO_NAME.get(holdings[-1], holdings[-1]),
@@ -457,6 +531,7 @@ def generate_json(conn, strategy_name, threshold, pool_codes, pool_cfg, trades, 
             'dates': dates,
             'rotation_values': rotation_values,
             'equal_weight_values': equal_weight_values,
+            'min_premium_values': min_premium_values,
             'holdings': holdings,
         },
         'trades': trades,
