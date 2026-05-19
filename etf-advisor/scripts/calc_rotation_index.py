@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-calc_rotation_index.py — 纳指ETF轮动指数计算
+calc_rotation_index.py — 多指数轮动指数计算
 
-从 etf_data 历史数据计算每日评分，模拟轮动策略，输出 rotation_index.json。
+从 etf_data 历史数据计算每日评分，模拟轮动策略，输出 rotation_index 表。
 
 评分公式:
-  Score = NAV涨幅×10% + (-综合超额溢价)×80% + (-当前溢价)×10% + 推荐加分(±0.5)
-  池内ETF +0.5, 池外 -0.5 (池子从 rotation-pool.json 读取)
-  切换阈值: 最优分值 - 持仓分值 >= T
+  Score = NAV涨幅×10% + (-综合超额溢价)×80% + (-当前溢价)×10% + 推荐加分(±bonus)
+  池内ETF: +bonus (从 rotation-pool.json 读取)
+  池外ETF: default_bonus (通常 -0.5)
+  切换阈值: 最优分值 - 持仓分值 >= T (从 rotation-pool.json 读取)
+
+支持指数: NASDAQ, SP500, NIKKEI, DAX
 
 Usage:
-    python3 scripts/calc_rotation_index.py --threshold 1        # 增量更新
-    python3 scripts/calc_rotation_index.py --threshold 1 --force # 全量重算
+    python3 scripts/calc_rotation_index.py --threshold 1.0 --index NASDAQ
+    python3 scripts/calc_rotation_index.py --threshold 1.0 --index all  # 所有指数
+    python3 scripts/calc_rotation_index.py --threshold 1.0 --force     # 全量重算所有指数
 """
 
 import argparse
@@ -28,32 +32,59 @@ DB_PATH = str(PROJECT_ROOT / "data" / "etf_premium.db")
 POOL_PATH = PROJECT_ROOT / "memory" / "knowledge" / "etf" / "rotation-pool.json"
 OUTPUT_DIR = PROJECT_ROOT / "data"
 
-ALL_NASDAQ = [
-    {'code': '513100', 'name': '国泰纳指ETF'},
-    {'code': '159941', 'name': '广发纳指ETF'},
-    {'code': '159660', 'name': '汇添富纳指ETF'},
-    {'code': '159501', 'name': '嘉实纳指ETF'},
-    {'code': '159632', 'name': '华安纳指ETF'},
-    {'code': '159659', 'name': '招商纳指ETF'},
-    {'code': '513300', 'name': '华夏纳指ETF'},
-    {'code': '513870', 'name': '富国纳指ETF'},
-    {'code': '513390', 'name': '博时纳指ETF'},
-    {'code': '513110', 'name': '南方纳指ETF'},
-]
-ALL_CODES = [e['code'] for e in ALL_NASDAQ]
-CODE_TO_NAME = {e['code']: e['name'] for e in ALL_NASDAQ}
+# ETF配置：每个指数对应的常规ETF列表（排除LOF）
+INDEX_ETFS_CONFIG = {
+    'NASDAQ': [
+        {'code': '513100', 'name': '国泰纳指ETF'},
+        {'code': '159941', 'name': '广发纳指ETF'},
+        {'code': '159660', 'name': '汇添富纳指ETF'},
+        {'code': '159501', 'name': '嘉实纳指ETF'},
+        {'code': '159632', 'name': '华安纳指ETF'},
+        {'code': '159659', 'name': '招商纳指ETF'},
+        {'code': '513300', 'name': '华夏纳指ETF'},
+        {'code': '513870', 'name': '富国纳指ETF'},
+        {'code': '513390', 'name': '博时纳指ETF'},
+        {'code': '513110', 'name': '南方纳指ETF'},
+    ],
+    'SP500': [
+        {'code': '513500', 'name': '博时标普ETF'},
+        {'code': '159655', 'name': '华夏标普ETF'},
+        {'code': '513650', 'name': '南方标普ETF'},
+        {'code': '159612', 'name': '国泰标普ETF'},
+    ],
+    'NIKKEI': [
+        {'code': '159866', 'name': '日经ETF工银'},
+        {'code': '513000', 'name': '日经225ETF易方达'},
+        {'code': '513520', 'name': '日经ETF华夏'},
+        {'code': '513880', 'name': '日经225ETF华安'},
+    ],
+    'DAX': [
+        {'code': '513030', 'name': '德国ETF华安'},
+        {'code': '159561', 'name': '德国ETF嘉实'},
+    ],
+}
 
 PERIODS = [('1M', 30), ('3M', 90), ('6M', 180), ('1Y', 365), ('ALL', None)]
 WEIGHTS = {'1M': 0.35, '3M': 0.25, '6M': 0.20, '1Y': 0.10, 'ALL': 0.10}
 
+# 所有指数统一从此日期开始计算历史数据
+DATA_START_DATE = '2025-01-01'
 DEFAULT_START = '2025-01-02'
 INITIAL_VALUE = 10000.0
 
 
-def load_pool_config():
+def load_pool_config(index_type):
+    """加载指定指数的轮动池配置。"""
     if POOL_PATH.exists():
         cfg = json.loads(POOL_PATH.read_text())
-        return cfg.get('NASDAQ', {})
+        return cfg.get(index_type, {})
+    return {}
+
+
+def load_all_pool_configs():
+    """加载所有指数的轮动池配置。"""
+    if POOL_PATH.exists():
+        return json.loads(POOL_PATH.read_text())
     return {}
 
 
@@ -105,15 +136,18 @@ def get_trading_dates(conn, start_date):
     return [r['date'] for r in rows]
 
 
-def load_all_data(conn, lookback_start):
-    """预加载所有需要的数据到内存，避免逐日查询。"""
+def load_all_data(conn, codes, lookback_start):
+    """预加载指定ETF的所有需要的数据到内存，避免逐日查询。"""
+    if not codes:
+        return {}, {}
+
     rows = conn.execute("""
         SELECT date, code, price, nav, premium_rate
         FROM etf_data
         WHERE code IN ({}) AND date >= ? AND price IS NOT NULL AND price > 0
         ORDER BY date, code
-    """.format(','.join('?' * len(ALL_CODES))),
-        ALL_CODES + [lookback_start]
+    """.format(','.join('?' * len(codes))),
+        list(codes) + [lookback_start]
     ).fetchall()
 
     premium_by_code = defaultdict(list)
@@ -172,13 +206,13 @@ def compute_nav_return_1y(premium_by_code, code, current_date_str, daily_data):
     return 0.0
 
 
-def compute_all_scores(conn, trading_dates, premium_by_code, daily_data, pool_cfg):
-    """计算所有交易日所有纳指ETF的评分，写入 rotation_scores。"""
+def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, daily_data, pool_cfg):
+    """计算所有交易日指定指数ETF的评分，写入 rotation_scores。"""
     pool = pool_cfg.get('pool', {})
-    default_bonus = pool_cfg.get('default_bonus', 0)
+    default_bonus = pool_cfg.get('default_bonus', -0.5)
 
     code_date_idx = {}
-    for code in ALL_CODES:
+    for code in codes:
         plist = premium_by_code.get(code, [])
         idx_map = {d: i for i, (d, _) in enumerate(plist)}
         code_date_idx[code] = (plist, idx_map)
@@ -188,7 +222,7 @@ def compute_all_scores(conn, trading_dates, premium_by_code, daily_data, pool_cf
     for date in trading_dates:
         day_data = daily_data.get(date, {})
 
-        for code in ALL_CODES:
+        for code in codes:
             if code not in day_data:
                 continue
 
@@ -229,7 +263,7 @@ def compute_all_scores(conn, trading_dates, premium_by_code, daily_data, pool_cf
             pool_score = score + bonus
 
             rows_to_insert.append((
-                date, 'NASDAQ', code, price, nav, premium_rate,
+                date, index_type, code, price, nav, premium_rate,
                 composite, nav_return_1y, score, pool_score
             ))
 
@@ -239,18 +273,18 @@ def compute_all_scores(conn, trading_dates, premium_by_code, daily_data, pool_cf
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, rows_to_insert)
     conn.commit()
-    print(f"  rotation_scores: {len(rows_to_insert)} rows written")
+    print(f"  rotation_scores[{index_type}]: {len(rows_to_insert)} rows written")
 
 
-def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIAL_VALUE):
+def simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, code_to_name, initial=INITIAL_VALUE):
     """从 rotation_scores 读取评分，模拟轮动策略。"""
     rows = conn.execute("""
         SELECT date, code, price, premium_rate, pool_score
         FROM rotation_scores
-        WHERE index_type = 'NASDAQ' AND code IN ({})
+        WHERE index_type = ? AND code IN ({})
         ORDER BY date, pool_score DESC
     """.format(','.join('?' * len(pool_codes))),
-        pool_codes
+        [index_type] + list(pool_codes)
     ).fetchall()
 
     by_date = defaultdict(list)
@@ -266,7 +300,7 @@ def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIA
     if not dates:
         return [], []
 
-    eq_shares, eq_dates = compute_equal_weight(conn, dates)
+    eq_shares, eq_dates = compute_equal_weight(conn, index_type, pool_codes, dates)
 
     holding_code = None
     shares = 0.0
@@ -294,7 +328,7 @@ def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIA
             trades.append({
                 'seq': trade_seq, 'date': date, 'action': '建仓',
                 'sell_code': None, 'sell_name': None, 'sell_premium': None, 'sell_score': None,
-                'buy_code': best_code, 'buy_name': CODE_TO_NAME.get(best_code, best_code),
+                'buy_code': best_code, 'buy_name': code_to_name.get(best_code, best_code),
                 'buy_price': best['price'], 'buy_premium': best['premium_rate'],
                 'buy_score': round(best_score, 2),
                 'premium_diff': None, 'score_diff': None,
@@ -337,10 +371,10 @@ def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIA
             trade_seq += 1
             trades.append({
                 'seq': trade_seq, 'date': date, 'action': '换仓',
-                'sell_code': switch_from, 'sell_name': CODE_TO_NAME.get(switch_from, switch_from),
+                'sell_code': switch_from, 'sell_name': code_to_name.get(switch_from, switch_from),
                 'sell_premium': round(old_premium, 2) if old_premium else None,
                 'sell_score': round(holding_score, 2),
-                'buy_code': best_code, 'buy_name': CODE_TO_NAME.get(best_code, best_code),
+                'buy_code': best_code, 'buy_name': code_to_name.get(best_code, best_code),
                 'buy_price': best['price'], 'buy_premium': round(best['premium_rate'], 2) if best['premium_rate'] else None,
                 'buy_score': round(best_score, 2),
                 'premium_diff': round((old_premium or 0) - (best['premium_rate'] or 0), 2),
@@ -364,22 +398,25 @@ def simulate_rotation(conn, strategy_name, threshold, pool_codes, initial=INITIA
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, result_rows)
     conn.commit()
-    print(f"  rotation_index: {len(result_rows)} rows written for {strategy_name}")
+    print(f"  rotation_index[{strategy_name}]: {len(result_rows)} rows written")
 
     return result_rows, trades
 
 
-def simulate_min_premium(conn, dates, initial=INITIAL_VALUE):
-    """模拟最低溢价策略：每天持有溢价最低的ETF（全部纳指ETF，不限pool）。"""
+def simulate_min_premium(conn, codes, dates, initial=INITIAL_VALUE):
+    """模拟最低溢价策略：每天持有溢价最低的ETF（不限pool）。"""
+    if not codes:
+        return {}
+
     rows = conn.execute("""
         SELECT date, code, price, premium_rate
         FROM etf_data
         WHERE code IN ({}) AND date IN ({}) AND price IS NOT NULL AND price > 0
         ORDER BY date, code
     """.format(
-        ','.join('?' * len(ALL_CODES)),
+        ','.join('?' * len(codes)),
         ','.join('?' * len(dates))
-    ), ALL_CODES + list(dates)).fetchall()
+    ), list(codes) + list(dates)).fetchall()
 
     by_date = defaultdict(list)
     for r in rows:
@@ -430,22 +467,22 @@ def simulate_min_premium(conn, dates, initial=INITIAL_VALUE):
     return result
 
 
-def compute_equal_weight(conn, dates):
-    """计算等权基准: 所有纳指ETF，buy-and-hold 不再平衡。"""
-    if not dates:
+def compute_equal_weight(conn, index_type, codes, dates):
+    """计算等权基准: 指定指数的所有ETF，buy-and-hold 不再平衡。"""
+    if not dates or not codes:
         return {}, {}
 
     first_date = dates[0]
-    per_etf = INITIAL_VALUE / len(ALL_CODES)
+    per_etf = INITIAL_VALUE / len(codes)
 
     all_dates_data = conn.execute("""
         SELECT date, code, price FROM etf_data
         WHERE code IN ({}) AND date IN ({}) AND price IS NOT NULL AND price > 0
         ORDER BY date
     """.format(
-        ','.join('?' * len(ALL_CODES)),
+        ','.join('?' * len(codes)),
         ','.join('?' * len(dates))
-    ), ALL_CODES + dates).fetchall()
+    ), list(codes) + list(dates)).fetchall()
 
     price_map = defaultdict(dict)
     for r in all_dates_data:
@@ -453,7 +490,7 @@ def compute_equal_weight(conn, dates):
 
     first_prices = price_map.get(first_date, {})
     eq_shares = {}
-    for code in ALL_CODES:
+    for code in codes:
         if code in first_prices and first_prices[code] > 0:
             eq_shares[code] = per_etf / first_prices[code]
 
@@ -462,7 +499,7 @@ def compute_equal_weight(conn, dates):
         day_prices = price_map.get(date, {})
         total = sum(
             eq_shares.get(code, 0) * day_prices.get(code, 0)
-            for code in ALL_CODES
+            for code in codes
             if code in eq_shares and code in day_prices
         )
         eq_dates[date] = total
@@ -470,135 +507,124 @@ def compute_equal_weight(conn, dates):
     return eq_shares, eq_dates
 
 
-def generate_json(conn, strategy_name, threshold, pool_codes, pool_cfg, trades, output_path):
-    """生成 rotation_index.json。"""
-    rows = conn.execute("""
-        SELECT date, holding_code, rotation_value, equal_weight_value
-        FROM rotation_index WHERE strategy = ? ORDER BY date
-    """, (strategy_name,)).fetchall()
+def process_index(conn, index_type, pool_cfg, args):
+    """处理单个指数的轮动计算。"""
+    print(f"\n{'='*60}")
+    print(f"处理指数: {index_type}")
+    print(f"{'='*60}")
 
-    if not rows:
-        print("  No data to generate JSON")
+    # 获取该指数的ETF列表
+    etf_configs = INDEX_ETFS_CONFIG.get(index_type)
+    if not etf_configs:
+        print(f"ERROR: 未找到{index_type}的ETF配置")
         return
 
-    dates = [r['date'] for r in rows]
-    rotation_values = [r['rotation_value'] for r in rows]
-    equal_weight_values = [r['equal_weight_value'] for r in rows]
-    holdings = [r['holding_code'] for r in rows]
+    codes = [e['code'] for e in etf_configs]
+    code_to_name = {e['code']: e['name'] for e in etf_configs}
 
-    # Compute min-premium strategy
-    print("  Computing min-premium strategy...")
-    mp_values_map = simulate_min_premium(conn, dates)
-    min_premium_values = [mp_values_map.get(d, INITIAL_VALUE) for d in dates]
-
-    final_rv = rotation_values[-1]
-    final_ev = equal_weight_values[-1]
-    final_mp = min_premium_values[-1] if min_premium_values else INITIAL_VALUE
-    rotation_return = (final_rv / INITIAL_VALUE - 1) * 100
-    equal_weight_return = (final_ev / INITIAL_VALUE - 1) * 100
-    min_premium_return = (final_mp / INITIAL_VALUE - 1) * 100
-
-    pool_names = {code: CODE_TO_NAME.get(code, code) for code in pool_codes}
-
-    # Attach min_premium_value to each trade
-    for t in trades:
-        t['min_premium_value'] = round(mp_values_map.get(t['date'], INITIAL_VALUE), 2)
-
-    data = {
-        'strategy': strategy_name,
-        'pool': pool_codes,
-        'pool_names': pool_names,
-        'threshold': threshold,
-        'initial_value': INITIAL_VALUE,
-        'start_date': dates[0],
-        'end_date': dates[-1],
-        'trading_days': len(dates),
-        'formula': 'score = NAV涨幅×10% + (-综合超额)×80% + (-当前溢价)×10% + 推荐加分(±0.5)',
-        'equal_weight_etfs': len(ALL_CODES),
-        'summary': {
-            'rotation_value': round(final_rv, 2),
-            'rotation_return': round(rotation_return, 2),
-            'equal_weight_value': round(final_ev, 2),
-            'equal_weight_return': round(equal_weight_return, 2),
-            'alpha': round(rotation_return - equal_weight_return, 2),
-            'min_premium_value': round(final_mp, 2),
-            'min_premium_return': round(min_premium_return, 2),
-            'trade_count': len(trades),
-            'current_holding': holdings[-1],
-            'current_holding_name': CODE_TO_NAME.get(holdings[-1], holdings[-1]),
-        },
-        'daily': {
-            'dates': dates,
-            'rotation_values': rotation_values,
-            'equal_weight_values': equal_weight_values,
-            'min_premium_values': min_premium_values,
-            'holdings': holdings,
-        },
-        'trades': trades,
-        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-    }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"  JSON: {output_path} ({len(dates)} days, {len(trades)} trades)")
-
-
-def main():
-    parser = argparse.ArgumentParser(description='计算纳指ETF轮动指数')
-    parser.add_argument('--threshold', type=float, required=True, help='切换阈值 T')
-    parser.add_argument('--force', action='store_true', help='全量重算')
-    parser.add_argument('--start', default=DEFAULT_START, help='起始日期')
-    args = parser.parse_args()
-
-    threshold = args.threshold
-    strategy_name = f'NASDAQ_T{threshold}'
-
-    pool_cfg = load_pool_config()
+    # 获取轮动池配置
+    threshold = pool_cfg.get('threshold', 1.0)
     pool_codes = list(pool_cfg.get('pool', {}).keys())
+
     if not pool_codes:
-        print("ERROR: No pool config found in rotation-pool.json")
+        print(f"ERROR: {index_type}没有配置轮动池")
         return
 
-    conn = get_db()
-    init_tables(conn)
+    strategy_name = f'{index_type}_T{threshold}'
 
+    # 处理增量更新
     if args.force:
-        conn.execute("DELETE FROM rotation_scores WHERE index_type = 'NASDAQ'")
-        conn.execute("DELETE FROM rotation_index WHERE strategy = ?", (strategy_name,))
+        conn.execute(f"DELETE FROM rotation_scores WHERE index_type = ?", (index_type,))
+        conn.execute(f"DELETE FROM rotation_index WHERE strategy LIKE ?", (f'{index_type}_%',))
         conn.commit()
-        print("Force mode: cleared existing data")
+        print(f"强制模式: 清空{index_type}的现有数据")
 
     last_score_date = conn.execute(
-        "SELECT MAX(date) FROM rotation_scores WHERE index_type = 'NASDAQ'"
+        "SELECT MAX(date) FROM rotation_scores WHERE index_type = ?",
+        (index_type,)
     ).fetchone()[0]
 
     score_start = args.start
     if last_score_date and not args.force:
         score_start = last_score_date
-        print(f"Incremental: scores from {score_start}")
+        print(f"增量更新: 从{score_start}开始")
 
     lookback = (datetime.strptime(score_start, '%Y-%m-%d') - timedelta(days=400)).strftime('%Y-%m-%d')
     trading_dates = get_trading_dates(conn, score_start)
 
     if not trading_dates:
-        print("No trading dates found")
+        print(f"未找到{index_type}的交易日期")
+        return
+
+    print(f"从{lookback}加载数据...")
+    premium_by_code, daily_data = load_all_data(conn, codes, lookback)
+
+    print(f"为{len(trading_dates)}个交易日计算评分...")
+    compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, daily_data, pool_cfg)
+
+    print(f"模拟{strategy_name}(阈值={threshold})...")
+    result_rows, trades = simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, code_to_name)
+
+    print(f"完成{index_type}处理: {len(result_rows)}条记录")
+
+    return {
+        'index_type': index_type,
+        'strategy': strategy_name,
+        'records': len(result_rows),
+        'trades': len(trades),
+        'codes': codes,
+        'code_to_name': code_to_name,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description='多指数轮动指数计算')
+    parser.add_argument('--threshold', type=float, help='切换阈值(覆盖配置文件)')
+    parser.add_argument('--index', default='all',
+                        choices=['all', 'NASDAQ', 'SP500', 'NIKKEI', 'DAX'],
+                        help='指数类型，all表示所有指数')
+    parser.add_argument('--force', action='store_true', help='全量重算')
+    parser.add_argument('--start', default=DEFAULT_START, help='起始日期')
+    args = parser.parse_args()
+
+    conn = get_db()
+    init_tables(conn)
+
+    all_pool_cfgs = load_all_pool_configs()
+    if not all_pool_cfgs:
+        print("ERROR: 未找到 rotation-pool.json 的配置")
         conn.close()
         return
 
-    print(f"Loading data from {lookback}...")
-    premium_by_code, daily_data = load_all_data(conn, lookback)
+    # 确定要处理的指数
+    indices_to_process = []
+    if args.index == 'all':
+        indices_to_process = ['NASDAQ', 'SP500', 'NIKKEI', 'DAX']
+    else:
+        indices_to_process = [args.index]
 
-    print(f"Computing scores for {len(trading_dates)} dates...")
-    compute_all_scores(conn, trading_dates, premium_by_code, daily_data, pool_cfg)
+    results = {}
+    for index_type in indices_to_process:
+        pool_cfg = all_pool_cfgs.get(index_type)
+        if not pool_cfg:
+            print(f"警告: {index_type}在rotation-pool.json中没有配置，跳过")
+            continue
 
-    print(f"Simulating {strategy_name} (threshold={threshold})...")
-    result_rows, trades = simulate_rotation(conn, strategy_name, threshold, pool_codes)
+        # 如果命令行指定了threshold，覆盖配置文件
+        if args.threshold:
+            pool_cfg['threshold'] = args.threshold
 
-    output_file = OUTPUT_DIR / 'rotation_index.json'
-    print("Generating JSON...")
-    generate_json(conn, strategy_name, threshold, pool_codes, pool_cfg, trades, output_file)
+        result = process_index(conn, index_type, pool_cfg, args)
+        if result:
+            results[index_type] = result
 
     conn.close()
+
+    print(f"\n{'='*60}")
+    print("处理完成")
+    print(f"{'='*60}")
+    for idx_type, info in results.items():
+        print(f"{idx_type}: {info['records']}条记录, {info['trades']}次轮动")
     print("Done!")
 
 

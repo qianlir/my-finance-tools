@@ -10,5 +10,42 @@
     "threshold": 1.0,
     "note": "基于2.8年回测，alpha +61.1%，切换23次",
     "last_review": "2026-05-08"
+  },
+  "SP500": {
+    "pool": {
+      "513500": { "bonus": 0.5 },
+      "159655": { "bonus": 0.5 },
+      "513650": { "bonus": 0.5 },
+      "159612": { "bonus": 0.5 }
+    },
+    "default_bonus": -0.5,
+    "threshold": 1.0,
+    "note": "标普500 4只常规ETF轮动池，自2025-01-01开始统计",
+    "last_review": "2026-05-19",
+    "status": "initial"
+  },
+  "NIKKEI": {
+    "pool": {
+      "159866": { "bonus": 0.5 },
+      "513000": { "bonus": 0.5 },
+      "513520": { "bonus": 0.5 },
+      "513880": { "bonus": 0.5 }
+    },
+    "default_bonus": -0.5,
+    "threshold": 1.0,
+    "note": "日经225 4只常规ETF全部参与轮动，自2025-01-01开始统计",
+    "last_review": "2026-05-19",
+    "status": "initial"
+  },
+  "DAX": {
+    "pool": {
+      "513030": { "bonus": 0.0 },
+      "159561": { "bonus": 0.0 }
+    },
+    "default_bonus": 0.0,
+    "threshold": 1.0,
+    "note": "德国DAX 仅2只ETF，两只均在池内，无加分区分，自2025-01-01开始统计",
+    "last_review": "2026-05-19",
+    "status": "initial"
   }
 }
