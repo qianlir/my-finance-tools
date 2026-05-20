@@ -369,14 +369,26 @@ def _get_holdings_with_prices(fund_code: str) -> list:
     conn.close()
     result = []
     for r in rows:
+        price = r['price']
+        prev_close = r['prev_close']
+        after_hours = r['after_hours'] if r['after_hours'] and r['after_hours'] > 0 else None
+        close_change = round(r['change_pct'], 2) if r['change_pct'] is not None else None
+
+        # 总涨跌 = 盘后价 vs 昨收 (叠加盘后), 无盘后则用收盘涨跌
+        if after_hours and prev_close and prev_close > 0:
+            total_change = round((after_hours / prev_close - 1) * 100, 2)
+        else:
+            total_change = close_change
+
         result.append({
             'ticker': r['ticker'],
             'name': r['stock_name'],
             'weight': round(r['weight_pct'], 2),
-            'price': round(r['price'], 2) if r['price'] else None,
-            'prev_close': round(r['prev_close'], 2) if r['prev_close'] else None,
-            'after_hours': round(r['after_hours'], 2) if r['after_hours'] and r['after_hours'] > 0 else None,
-            'change_pct': round(r['change_pct'], 2) if r['change_pct'] is not None else None,
+            'price': round(price, 2) if price else None,
+            'prev_close': round(prev_close, 2) if prev_close else None,
+            'after_hours': round(after_hours, 2) if after_hours else None,
+            'change_pct': total_change,          # 含盘后的总涨跌
+            'close_change_pct': close_change,    # 纯收盘涨跌 (供参考)
         })
     return result
 
