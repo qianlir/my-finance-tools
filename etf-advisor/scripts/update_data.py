@@ -1801,7 +1801,12 @@ def estimate_nav_by_proxy(fund_code, confirmed_nav, futures_data):
 
 
 def estimate_nav_by_holdings(fund_code, confirmed_nav):
-    """用持仓股票涨跌估算 NAV
+    """用持仓股票涨跌估算 NAV (优先用盘后价)
+
+    涨跌算法:
+      有盘后价: change = (after_hours / prev_close - 1) × 100  (含盘后)
+      无盘后价: change = change_pct  (纯收盘涨跌)
+
     返回: (estimated_nav, change_pct) 或 (confirmed_nav, 0)
     """
     conn = sqlite3.connect(DB_PATH)
@@ -1821,9 +1826,19 @@ def estimate_nav_by_holdings(fund_code, confirmed_nav):
 
     for h in holdings:
         p = prices.get(h['ticker'])
-        if p and p['change_pct'] is not None:
-            weighted_change += h['weight_pct'] * p['change_pct']
-            matched_weight += h['weight_pct']
+        if not p:
+            continue
+        # 优先用盘后价算总涨跌 (after_hours vs prev_close)
+        ah = p['after_hours']
+        prev = p['prev_close']
+        if ah and ah > 0 and prev and prev > 0:
+            stock_change = (ah / prev - 1) * 100
+        elif p['change_pct'] is not None:
+            stock_change = p['change_pct']
+        else:
+            continue
+        weighted_change += h['weight_pct'] * stock_change
+        matched_weight += h['weight_pct']
 
     if matched_weight == 0:
         return confirmed_nav, 0
