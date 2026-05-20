@@ -260,6 +260,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
                 {[
                   ['净值', e.nav.toFixed(3), null],
                   ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(estChg) + ')', chg(estChg)],
+                  e.nav_formula ? ['公式', e.nav_formula, null] : null,
                   ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)],
                   ['3M均溢价', fmtPct(e.avg_3m), null],
                   ['6M均溢价', fmtPct(e.avg_6m), null],
@@ -267,10 +268,14 @@ function MobPremium({ activeIdx, setActiveIdx }) {
                   ['溢价>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null],
                   ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)],
                   ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)],
-                ].map(([l, v, c]) => (
-                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--ink-10)' }}>
+                ].filter(Boolean).map(([l, v, c]) => (
+                  <div key={l} style={l === '公式'
+                    ? { padding: '4px 0', borderBottom: '1px solid var(--ink-10)', wordBreak: 'break-all' }
+                    : { display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--ink-10)' }}>
                     <span style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-3)' }}>{l}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: c || 'var(--ink)' }}>{v}</span>
+                    {l === '公式'
+                      ? <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-muted)', marginTop: 2, lineHeight: 1.5 }}>{v}</div>
+                      : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: c || 'var(--ink)' }}>{v}</span>}
                   </div>
                 ))}
               </div>
