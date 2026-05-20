@@ -1,3 +1,4 @@
+// --- shared.jsx ---
 // Shared components — ETF Advisor v3
 function fmtPct(v, d) {
   if (v == null) return '—';
@@ -535,27 +536,11 @@ function FundDetailModal({
       fontSize: 12,
       color: c || 'var(--ink)'
     }
-  }, v))), holdings.length > 0 && (() => {
-    const totalWeight = holdings.reduce((sum, h) => sum + (h.weight || 0), 0);
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 16
-      }
-    }, totalWeight < 60 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        padding: '8px 12px',
-        background: 'rgba(168,52,42,0.08)',
-        border: '1px solid rgba(168,52,42,0.2)',
-        borderRadius: 4,
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: 'var(--font-ui)',
-        fontSize: 11,
-        color: '#A8342A'
-      }
-    }, "⚠️ \u6301\u4ED3\u8986\u76D6\u7387\u4EC5 ", totalWeight.toFixed(0), "%\uFF0C\u4F30\u7B97\u51C0\u503C\u53EF\u80FD\u8BEF\u5DEE\u8F83\u5927")), /*#__PURE__*/React.createElement("div", {
+  }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: 'var(--font-ui)',
       fontSize: 11,
@@ -624,8 +609,7 @@ function FundDetailModal({
       fontSize: 11,
       color: chg(h.change_pct)
     }
-  }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
-  })(), /*#__PURE__*/React.createElement("div", {
+  }, h.change_pct != null ? fmtPct(h.change_pct) : '—')))))), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       marginTop: 16
@@ -681,6 +665,7 @@ window.TD = TD;
 window.TDL = TDL;
 window.TDM = TDM;
 
+// --- pc.jsx ---
 // PC layout — tab-based: Overview + Premium Analysis
 const {
   useState: useS,
@@ -1529,6 +1514,7 @@ window.PCNav = PCNav;
 window.PCOverview = PCOverview;
 window.PCPremium = PCPremium;
 
+// --- mobile.jsx ---
 // Mobile layout — tab-based: Overview + Premium Analysis
 const {
   useState: useSM
@@ -1931,27 +1917,11 @@ function MobPremium({
         fontSize: 12,
         color: c || 'var(--ink)'
       }
-    }, v))), holdings.length > 0 && (() => {
-      const totalWeight = holdings.reduce((sum, h) => sum + (h.weight || 0), 0);
-      return /*#__PURE__*/React.createElement("div", {
-        style: {
-          marginTop: 16
-        }
-      }, totalWeight < 60 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          padding: '8px 12px',
-          background: 'rgba(168,52,42,0.08)',
-          border: '1px solid rgba(168,52,42,0.2)',
-          borderRadius: 4,
-          marginBottom: 12
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontFamily: 'var(--font-ui)',
-          fontSize: 11,
-          color: '#A8342A'
-        }
-      }, "⚠️ \u6301\u4ED3\u8986\u76D6\u7387\u4EC5 ", totalWeight.toFixed(0), "%\uFF0C\u4F30\u7B97\u51C0\u503C\u53EF\u80FD\u8BEF\u5DEE\u8F83\u5927")), /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6"), holdings.map(h => /*#__PURE__*/React.createElement("div", {
+    }, v))), holdings.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 16
+      }
+    }, /*#__PURE__*/React.createElement(Label, null, "\u6301\u4ED3\u660E\u7EC6"), holdings.map(h => /*#__PURE__*/React.createElement("div", {
       key: h.ticker,
       style: {
         display: 'flex',
@@ -1987,8 +1957,7 @@ function MobPremium({
         fontSize: 10,
         color: chg(h.change_pct)
       }
-    }, h.change_pct != null ? fmtPct(h.change_pct) : '—')))));
-    })())
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2193,9 +2162,13 @@ function MobPremium({
         background: 'var(--ink-05)',
         borderRadius: 2
       }
-    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(estChg) + ')', chg(estChg)], ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M均溢价', fmtPct(e.avg_3m), null], ['6M均溢价', fmtPct(e.avg_6m), null], ['1Y均溢价', fmtPct(e.avg_1y), null], ['溢价>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+    }, [['净值', e.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3) + ' (' + fmtPct(estChg) + ')', chg(estChg)], e.nav_formula ? ['公式', e.nav_formula, null] : null, ['估算溢价', fmtPct(e.display_premium), chg(e.display_premium)], ['3M均溢价', fmtPct(e.avg_3m), null], ['6M均溢价', fmtPct(e.avg_6m), null], ['1Y均溢价', fmtPct(e.avg_1y), null], ['溢价>7%天数', String(e.days_gt7), e.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(e.nav_return_1y), chg(e.nav_return_1y)], ['年价格涨幅', fmtPct(e.price_return_1y), chg(e.price_return_1y)]].filter(Boolean).map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
       key: l,
-      style: {
+      style: l === '公式' ? {
+        padding: '4px 0',
+        borderBottom: '1px solid var(--ink-10)',
+        wordBreak: 'break-all'
+      } : {
         display: 'flex',
         justifyContent: 'space-between',
         padding: '4px 0',
@@ -2207,7 +2180,15 @@ function MobPremium({
         fontSize: 10,
         color: 'var(--fg-3)'
       }
-    }, l), /*#__PURE__*/React.createElement("span", {
+    }, l), l === '公式' ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        color: 'var(--fg-muted)',
+        marginTop: 2,
+        lineHeight: 1.5
+      }
+    }, v) : /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
@@ -2232,6 +2213,7 @@ window.MobTabs = MobTabs;
 window.MobOverview = MobOverview;
 window.MobPremium = MobPremium;
 
+// --- tweaks-panel.jsx ---
 // tweaks-panel.jsx
 // Reusable Tweaks shell + form-control helpers.
 //
@@ -2924,70 +2906,3 @@ Object.assign(window, {
   TweakColor,
   TweakButton
 });
-
-// === App + Router ===
-function parseRoute() {
-  var path = location.pathname;
-  var params = new URLSearchParams(location.search);
-  var isMobile = /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent) || path.startsWith('/m');
-  var view = isMobile ? 'mobile' : 'pc';
-  var tab = 'overview';
-  if (path.includes('rotation')) tab = 'rotation';
-  else if (path.includes('premium') || path.includes('detail')) tab = 'premium';
-  var idx = params.get('idx') || 'NASDAQ';
-  return { view: view, tab: tab, idx: idx };
-}
-
-function App() {
-  var route = parseRoute();
-  var _vm = React.useState(route.view), viewMode = _vm[0], setViewMode = _vm[1];
-  var _tb = React.useState(route.tab), tab = _tb[0], setTab = _tb[1];
-  var _ai = React.useState(route.idx), activeIdx = _ai[0], setActiveIdx = _ai[1];
-  var _fu = React.useState(0); window.__rerender = function() { _fu[1](function(n) { return n + 1; }); };
-
-  function navigate(view, t, idx) {
-    var path = view === 'mobile' ? '/m/' : '/';
-    if (t === 'premium') path += 'premium';
-    else if (t === 'rotation') path += 'rotation';
-    var search = idx && idx !== 'NASDAQ' ? '?idx=' + idx : '';
-    history.replaceState(null, '', path + search);
-  }
-
-  function switchTab(t) { setTab(t); navigate(viewMode, t, activeIdx); window.scrollTo(0, 0); }
-  function switchIdx(idx) { setActiveIdx(idx); navigate(viewMode, tab, idx); }
-
-  var pageKey = tab + activeIdx;
-
-  var page;
-  if (tab === 'rotation') {
-    page = React.createElement(viewMode === 'pc' ? PCRotation : MobRotation);
-  } else if (tab === 'premium') {
-    page = React.createElement(viewMode === 'pc' ? PCPremium : MobPremium, { activeIdx: activeIdx, setActiveIdx: switchIdx });
-  } else {
-    page = React.createElement(viewMode === 'pc' ? PCOverview : MobOverview, { setTab: switchTab, setIdx: switchIdx });
-  }
-
-  if (viewMode === 'pc') {
-    return React.createElement(React.Fragment, null,
-      React.createElement(PCNav, { tab: tab, setTab: switchTab }),
-      React.createElement('div', { className: 'fade-in', key: pageKey }, page),
-      React.createElement('div', { className: 'ft' },
-        React.createElement('div', null, '\u00a9 2026 千里知投 · 数据仅供参考，不构成投资建议'),
-        React.createElement('div', { style: { marginTop: 6, letterSpacing: '0.04em', textTransform: 'none' } },
-          React.createElement('a', { href: 'https://beian.miit.gov.cn/', target: '_blank', rel: 'noopener' }, '浙ICP备2026031343号')
-        )
-      )
-    );
-  }
-
-  return React.createElement('div', { className: 'mob' },
-    React.createElement('div', { className: 'fade-in', key: pageKey, style: { minHeight: '100vh' } }, page),
-    React.createElement('div', { style: { padding: '12px 16px 56px', textAlign: 'center', fontFamily: 'var(--font-ui)', fontSize: 9, color: 'var(--fg-muted)' } },
-      React.createElement('div', null, '\u00a9 2026 千里知投 · 数据仅供参考'),
-      React.createElement('a', { href: 'https://beian.miit.gov.cn/', target: '_blank', rel: 'noopener', style: { color: 'var(--fg-muted)', textDecoration: 'none' } }, '浙ICP备2026031343号')
-    ),
-    React.createElement(MobTabs, { tab: tab, setTab: switchTab })
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
