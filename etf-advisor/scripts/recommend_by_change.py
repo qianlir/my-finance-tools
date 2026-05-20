@@ -1058,8 +1058,9 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                         )
                     else:
                         nav_formula = f"{nav:.3f} × {seg1_factor:.4f}(盘后) = {estimated_nav:.3f}"
-                except Exception:
+                except Exception as _e:
                     nav_formula = f"{nav:.3f} × (1{_est_chg:+.2f}%) = {estimated_nav:.3f}"
+                    print(f"  {code} 公式生成异常: {_e}")
             elif _fc and _fc['estimate_method'] == 'fundgz' and nav:
                 # A 股 LOF：用东方财富 fundgz API 获取盘中估值
                 import sys; sys.path.insert(0, str(SCRIPT_DIR))
