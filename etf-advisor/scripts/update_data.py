@@ -1609,6 +1609,96 @@ def update_all_holdings_prices():
         save_stock_prices(all_prices)
 
 
+def compute_proxy_betas(fund_code, window=90):
+    """自动计算 OTHERS ETF 与指数 ETF 的滚动 β 系数 (最近 N 天 OLS 回归)
+
+    模型: target_nav_ret = β_nq × 纳指_ret + β_es × 标普_ret + α
+    proxy 用 513100(纳指) 和 513500(标普) 的 NAV 涨跌.
+
+    返回: {'NQ': β_nq, 'ES': β_es, 'alpha': α, 'r2': R², 'n': 样本数} 或 None
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    def _nav_rets(code):
+        rows = conn.execute("""
+            SELECT date, nav FROM etf_data
+            WHERE code=? AND nav IS NOT NULL AND nav > 0 ORDER BY date
+        """, (code,)).fetchall()
+        return {rows[i]['date']: (rows[i]['nav'] / rows[i - 1]['nav'] - 1) * 100
+                for i in range(1, len(rows))}
+
+    target = _nav_rets(fund_code)
+    nq_proxy = _nav_rets('513100')  # 纳指 ETF 作为 NQ proxy
+    es_proxy = _nav_rets('513500')  # 标普 ETF 作为 ES proxy
+    conn.close()
+
+    # 对齐日期, 取最近 window 天
+    common = sorted(set(target.keys()) & set(nq_proxy.keys()) & set(es_proxy.keys()))
+    if len(common) < 30:
+        return None
+    common = common[-window:]
+
+    y = [target[d] for d in common]
+    x_nq = [nq_proxy[d] for d in common]
+    x_es = [es_proxy[d] for d in common]
+    n = len(y)
+
+    # 2 元 OLS: y = β1*x_nq + β2*x_es + α
+    my = sum(y) / n
+    m1 = sum(x_nq) / n
+    m2 = sum(x_es) / n
+    yc = [y[i] - my for i in range(n)]
+    x1c = [x_nq[i] - m1 for i in range(n)]
+    x2c = [x_es[i] - m2 for i in range(n)]
+
+    s11 = sum(a * a for a in x1c)
+    s22 = sum(a * a for a in x2c)
+    s12 = sum(x1c[i] * x2c[i] for i in range(n))
+    s1y = sum(x1c[i] * yc[i] for i in range(n))
+    s2y = sum(x2c[i] * yc[i] for i in range(n))
+
+    det = s11 * s22 - s12 * s12
+    if abs(det) < 1e-12:
+        return None
+    b1 = (s22 * s1y - s12 * s2y) / det
+    b2 = (s11 * s2y - s12 * s1y) / det
+    alpha = my - b1 * m1 - b2 * m2
+
+    ss_res = sum((y[i] - alpha - b1 * x_nq[i] - b2 * x_es[i]) ** 2 for i in range(n))
+    ss_tot = sum((y[i] - my) ** 2 for i in range(n))
+    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+
+    return {'NQ': round(b1, 3), 'ES': round(b2, 3), 'alpha': round(alpha, 4),
+            'r2': round(r2, 3), 'n': n}
+
+
+def estimate_nav_by_proxy(fund_code, confirmed_nav, futures_data):
+    """用指数期货涨跌 × 滚动β 估算 OTHERS ETF 实时 NAV
+
+    1. 先调 compute_proxy_betas 取最近 90 天 β
+    2. 用 NQ/ES 期货当前涨跌 × β 估算净值变化
+    3. 返回 (estimated_nav, change_pct) 或 (confirmed_nav, 0)
+    """
+    betas = compute_proxy_betas(fund_code, window=90)
+    if not betas or betas['r2'] < 0.3:
+        # β 不可靠, 回退到持仓估算
+        return confirmed_nav, 0
+
+    nq_change = futures_data.get('NQ', {}).get('change_pct')
+    es_change = futures_data.get('ES', {}).get('change_pct')
+
+    if nq_change is None and es_change is None:
+        return confirmed_nav, 0
+
+    nq_chg = nq_change if nq_change is not None else 0
+    es_chg = es_change if es_change is not None else 0
+
+    est_change = betas['NQ'] * nq_chg + betas['ES'] * es_chg + betas['alpha']
+    est_nav = confirmed_nav * (1 + est_change / 100)
+    return est_nav, est_change
+
+
 def estimate_nav_by_holdings(fund_code, confirmed_nav):
     """用持仓股票涨跌估算 NAV
     返回: (estimated_nav, change_pct) 或 (confirmed_nav, 0)
