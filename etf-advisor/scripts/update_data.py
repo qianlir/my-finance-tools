@@ -1511,7 +1511,8 @@ def fetch_us_stock_prices(tickers):
             try:
                 price = float(f[1])
                 prev_close = float(f[26]) if f[26] else price
-                after_hours = float(f[17]) if len(f) > 17 and f[17] and float(f[17]) > 0 else 0
+                # f[21] = 盘后价 (after-hours price), f[22] = 盘后涨跌幅%
+                after_hours = float(f[21]) if len(f) > 21 and f[21] and float(f[21]) > 0 else 0
                 change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
                 result[sym] = {
                     'price': price, 'prev_close': prev_close,
