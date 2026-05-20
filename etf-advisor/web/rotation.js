@@ -348,18 +348,28 @@ function MobRotation() {
     var buyShort = _rotEtfShort(t.buy_name);
     var sellShort = t.sell_name ? _rotEtfShort(t.sell_name) : null;
 
+    var premiumDiffColor = t.premium_diff > 0 ? '#2A6B4F' : t.premium_diff < 0 ? '#A8342A' : 'var(--fg-3)';
     return ce('div', { key: t.seq, style: { padding: '10px 0', borderTop: '1px solid var(--ink-10)' } },
-      // Row 1: date + action + lead
-      ce('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
-        ce('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+      // Row 1: date + action + 溢差 + 分差 + lead 金额
+      ce('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 6 } },
+        ce('div', { style: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 } },
           ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' } }, t.date.slice(5)),
-          ce('span', { style: { fontFamily: 'var(--font-ui)', fontSize: 11, fontWeight: 500, color: isInit ? '#A8342A' : 'var(--fg-2)' } }, t.action)
+          ce('span', { style: { fontFamily: 'var(--font-ui)', fontSize: 11, fontWeight: 500, color: isInit ? '#A8342A' : 'var(--fg-2)' } }, t.action),
+          // 溢差 + 分差 紧靠操作类型, 用小标签风格
+          t.premium_diff != null && sellShort
+            ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: premiumDiffColor, padding: '1px 4px', borderRadius: 2, background: 'var(--ink-05)' } },
+                '溢' + (t.premium_diff > 0 ? '+' : '') + t.premium_diff.toFixed(1))
+            : null,
+          t.score_diff != null
+            ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: '#2A6B4F', padding: '1px 4px', borderRadius: 2, background: 'var(--ink-05)' } },
+                '分△' + t.score_diff.toFixed(1))
+            : null
         ),
-        ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: leadColor } },
+        ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: leadColor, whiteSpace: 'nowrap' } },
           t.lead != null && t.lead !== 0 ? (t.lead > 0 ? '+' : '') + _rotFmtMoney(t.lead) : ''
         )
       ),
-      // Row 2: sell → buy with codes and scores
+      // Row 2: 卖 -> 买 (只显示交易流程, 不再有溢/分)
       ce('div', { style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, flexWrap: 'wrap' } },
         sellShort
           ? ce(React.Fragment, null,
@@ -377,15 +387,7 @@ function MobRotation() {
         t.buy_premium != null
           ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)' } }, t.buy_premium.toFixed(1) + '%')
           : null,
-        ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, _rotFmtScore(t.buy_score)),
-        t.premium_diff != null && sellShort
-          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, marginLeft: 4,
-              color: t.premium_diff > 0 ? '#2A6B4F' : t.premium_diff < 0 ? '#A8342A' : 'var(--fg-3)' } },
-              '溢' + (t.premium_diff > 0 ? '+' : '') + t.premium_diff.toFixed(1))
-          : null,
-        t.score_diff != null
-          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: '#2A6B4F', marginLeft: 4 } }, '分△' + t.score_diff.toFixed(1))
-          : null
+        ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, _rotFmtScore(t.buy_score))
       ),
       // Row 3: portfolio values
       ce('div', { style: { display: 'flex', gap: 12, marginTop: 3, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' } },
