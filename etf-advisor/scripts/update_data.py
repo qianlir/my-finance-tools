@@ -417,6 +417,61 @@ def get_futures_from_sina(symbol):
         return None
 
 
+def capture_futures_anchor():
+    """在美股盘后结束时刻 (北京 08:00) 采集 NQ/ES 的锚点价格.
+
+    用途: 两段拼接估算 OTHERS ETF 实时净值:
+      段1 = 个股盘后价 vs 收盘价 (精确到个股)
+      段2 = NQ当前价 vs NQ锚点价 (指数级别近似, × β)
+
+    每天只采集一次, 已有则跳过.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = sqlite3.connect(DB_PATH)
+    existing = conn.execute(
+        "SELECT date FROM futures_anchor WHERE date=?", (today,)
+    ).fetchone()
+    if existing:
+        conn.close()
+        return  # 今天已采集
+
+    nq = get_futures_from_sina('NQ')
+    es = get_futures_from_sina('ES')
+
+    if not nq and not es:
+        conn.close()
+        return
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn.execute("""
+        INSERT OR REPLACE INTO futures_anchor (date, nq_price, es_price, captured_at, source)
+        VALUES (?, ?, ?, ?, 'sina')
+    """, (today, nq['price'] if nq else None, es['price'] if es else None, now))
+    conn.commit()
+    conn.close()
+
+    nq_str = f"NQ={nq['price']:.2f}" if nq else "NQ=N/A"
+    es_str = f"ES={es['price']:.2f}" if es else "ES=N/A"
+    print(f"  锚点价已采集: {nq_str}, {es_str} @ {now}")
+
+
+def get_futures_anchor(date=None):
+    """获取指定日期的 NQ/ES 锚点价 (盘后结束时刻).
+    返回: {'nq_price': float, 'es_price': float} 或 None
+    """
+    if date is None:
+        date = datetime.now().strftime('%Y-%m-%d')
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT nq_price, es_price FROM futures_anchor WHERE date=?", (date,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return {'nq_price': row['nq_price'], 'es_price': row['es_price']}
+    return None
+
+
 def get_realtime_futures():
     """获取实时期货涨跌数据（新浪财经）"""
     futures_data = {}
@@ -1674,29 +1729,74 @@ def compute_proxy_betas(fund_code, window=90):
 
 
 def estimate_nav_by_proxy(fund_code, confirmed_nav, futures_data):
-    """用指数期货涨跌 × 滚动β 估算 OTHERS ETF 实时 NAV
+    """两段拼接估算 OTHERS ETF 实时 NAV
 
-    1. 先调 compute_proxy_betas 取最近 90 天 β
-    2. 用 NQ/ES 期货当前涨跌 × β 估算净值变化
-    3. 返回 (estimated_nav, change_pct) 或 (confirmed_nav, 0)
+    段1: 个股盘后价 vs 收盘价 → 精确到个股 (用持仓加权)
+    段2: NQ/ES 当前价 vs 锚点价 (盘后结束时) → 指数级别近似 (用 β)
+
+    公式: est_nav = confirmed_nav × (1 + 段1%) × (1 + 段2%)
+
+    fallback: 如果无锚点价, 退化为全程用 β × 期货涨跌 (旧方案)
     """
     betas = compute_proxy_betas(fund_code, window=90)
     if not betas or betas['r2'] < 0.3:
-        # β 不可靠, 回退到持仓估算
         return confirmed_nav, 0
 
-    nq_change = futures_data.get('NQ', {}).get('change_pct')
-    es_change = futures_data.get('ES', {}).get('change_pct')
+    # --- 段1: 个股盘后价 vs 收盘价 (精确) ---
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    holdings = conn.execute(
+        "SELECT ticker, weight_pct FROM fund_holdings WHERE fund_code=?", (fund_code,)
+    ).fetchall()
+    prices = {r['ticker']: r for r in conn.execute("SELECT * FROM stock_prices").fetchall()}
+    conn.close()
 
-    if nq_change is None and es_change is None:
-        return confirmed_nav, 0
+    seg1_change = 0.0
+    if holdings:
+        matched_weight = 0
+        weighted_ah_change = 0
+        for h in holdings:
+            p = prices.get(h['ticker'])
+            if not p or not p['price'] or p['price'] <= 0:
+                continue
+            # 优先用盘后价, 没有则用收盘价 (change = 0)
+            after_hours = p['after_hours'] if p.get('after_hours') and p['after_hours'] > 0 else p['price']
+            ah_change = (after_hours / p['price'] - 1) * 100
+            weighted_ah_change += h['weight_pct'] * ah_change
+            matched_weight += h['weight_pct']
+        if matched_weight > 0:
+            seg1_change = weighted_ah_change / matched_weight
 
-    nq_chg = nq_change if nq_change is not None else 0
-    es_chg = es_change if es_change is not None else 0
+    # --- 段2: 期货当前价 vs 锚点价 (近似) ---
+    seg2_change = 0.0
+    anchor = get_futures_anchor()  # 今天 08:00 采集的锚点
 
-    est_change = betas['NQ'] * nq_chg + betas['ES'] * es_chg + betas['alpha']
-    est_nav = confirmed_nav * (1 + est_change / 100)
-    return est_nav, est_change
+    nq_data = futures_data.get('NQ', {})
+    es_data = futures_data.get('ES', {})
+    nq_now = nq_data.get('price')
+    es_now = es_data.get('price')
+
+    if anchor and anchor.get('nq_price') and nq_now:
+        # 有锚点: 段2 = (当前期货 / 锚点期货 - 1) × β
+        nq_seg2 = (nq_now / anchor['nq_price'] - 1) * 100
+        es_seg2 = 0.0
+        if anchor.get('es_price') and es_now:
+            es_seg2 = (es_now / anchor['es_price'] - 1) * 100
+        seg2_change = betas['NQ'] * nq_seg2 + betas['ES'] * es_seg2
+    else:
+        # 无锚点 fallback: 全程用 β × 期货涨跌 (从昨收起算)
+        nq_chg = nq_data.get('change_pct', 0) or 0
+        es_chg = es_data.get('change_pct', 0) or 0
+        # 此时段1+段2 合并为一段
+        total_change = betas['NQ'] * nq_chg + betas['ES'] * es_chg + betas['alpha']
+        est_nav = confirmed_nav * (1 + total_change / 100)
+        return est_nav, total_change
+
+    # --- 拼接 ---
+    # est_nav = confirmed_nav × (1 + 段1%) × (1 + 段2%)
+    est_nav = confirmed_nav * (1 + seg1_change / 100) * (1 + seg2_change / 100)
+    total_change = (est_nav / confirmed_nav - 1) * 100
+    return est_nav, total_change
 
 
 def estimate_nav_by_holdings(fund_code, confirmed_nav):
@@ -1956,6 +2056,11 @@ def init_database():
             after_hours REAL, change_pct REAL, updated_at TEXT)""",
         """CREATE TABLE IF NOT EXISTS admin_config (
             key TEXT PRIMARY KEY, value TEXT)""",
+        """CREATE TABLE IF NOT EXISTS futures_anchor (
+            date TEXT PRIMARY KEY,
+            nq_price REAL, es_price REAL,
+            captured_at TEXT,
+            source TEXT DEFAULT 'sina')""",
     ]:
         cursor.execute(ddl)
 
