@@ -207,9 +207,29 @@ def compute_nav_return_1y(premium_by_code, code, current_date_str, daily_data):
 
 
 def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, daily_data, pool_cfg):
-    """计算所有交易日指定指数ETF的评分，写入 rotation_scores。"""
+    """计算所有交易日指定指数ETF的评分，写入 rotation_scores。
+
+    评分公式 (z-score 标准化, abc 满足 a+b+c=1):
+        nav_excess = NAV_return_1y - 池均值
+        F = (nav_excess/σ_nav) * a + (-composite/σ_excess) * b + (-premium/σ_premium) * c
+
+    其中 σ_nav, σ_excess, σ_premium 是池内全期标准差, 从 rotation-pool.json 的 sigmas 字段读取.
+    标准化使分值落在 [-10, +10] 内, T 仍然自由设置 (从 threshold 字段读取).
+    """
     pool = pool_cfg.get('pool', {})
     default_bonus = pool_cfg.get('default_bonus', -0.5)
+    formula = pool_cfg.get('formula', {'a': 0.10, 'b': 0.80, 'c': 0.10})
+    w_nav = formula.get('a', 0.10)
+    w_excess = formula.get('b', 0.80)
+    w_premium = formula.get('c', 0.10)
+
+    # z-score 标准化所需的 σ (从配置读取, 不在配置时用 1.0 退化为不标准化)
+    sigmas = pool_cfg.get('sigmas', {'nav': 1.0, 'excess': 1.0, 'premium': 1.0})
+    sig_nav = sigmas.get('nav', 1.0) or 1.0
+    sig_excess = sigmas.get('excess', 1.0) or 1.0
+    sig_premium = sigmas.get('premium', 1.0) or 1.0
+
+    pool_codes_set = set(pool.keys()) if pool else set(codes)
 
     code_date_idx = {}
     for code in codes:
@@ -221,6 +241,17 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
 
     for date in trading_dates:
         day_data = daily_data.get(date, {})
+
+        nav_1y_by_code = {}
+        for code in codes:
+            if code not in day_data:
+                continue
+            nav_1y_by_code[code] = compute_nav_return_1y(
+                premium_by_code, code, date, daily_data
+            )
+
+        pool_navs = [nav_1y_by_code[c] for c in nav_1y_by_code if c in pool_codes_set]
+        nav_pool_mean = sum(pool_navs) / len(pool_navs) if pool_navs else 0.0
 
         for code in codes:
             if code not in day_data:
@@ -251,12 +282,14 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
                 excess_by_period.get(p, 0) * w for p, w in WEIGHTS.items()
             )
 
-            nav_return_1y = compute_nav_return_1y(premium_by_code, code, date, daily_data)
+            nav_return_1y = nav_1y_by_code.get(code, 0.0)
+            nav_excess = nav_return_1y - nav_pool_mean
 
+            # z-score 标准化: 每个分量除以池内 σ
             score = (
-                nav_return_1y * 0.10
-                + (-composite) * 0.80
-                + (-premium_rate) * 0.10
+                (nav_excess / sig_nav) * w_nav
+                + (-composite / sig_excess) * w_excess
+                + (-premium_rate / sig_premium) * w_premium
             )
 
             bonus = pool[code]['bonus'] if code in pool else default_bonus
@@ -403,8 +436,12 @@ def simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, co
     return result_rows, trades
 
 
-def simulate_min_premium(conn, codes, dates, initial=INITIAL_VALUE):
-    """模拟最低溢价策略：每天持有溢价最低的ETF（不限pool）。"""
+def simulate_min_premium(conn, codes, dates, initial=INITIAL_VALUE, threshold=1.0):
+    """模拟纯溢价策略 (公平基线): F = -premium_rate, 与轮动相同的 T 阈值.
+    当 (lowest_premium - holding_premium) * (-1) >= T (即 holding_premium - lowest_premium >= T) 时切换.
+    通俗讲: 持仓溢价比最低的高 T% 时才换仓.
+    无交易成本 (与轮动策略保持口径一致).
+    """
     if not codes:
         return {}
 
@@ -428,14 +465,13 @@ def simulate_min_premium(conn, codes, dates, initial=INITIAL_VALUE):
 
     holding_code = None
     shares = 0.0
-    result = {}  # date -> value
+    result = {}
 
     for date in dates:
         day_etfs = by_date.get(date, [])
         if not day_etfs:
             continue
 
-        # Find lowest premium
         candidates = [(e['premium_rate'], e) for e in day_etfs if e['premium_rate'] is not None]
         if not candidates:
             continue
@@ -448,18 +484,18 @@ def simulate_min_premium(conn, codes, dates, initial=INITIAL_VALUE):
             result[date] = initial
             continue
 
-        # Current value with held ETF
         held = next((e for e in day_etfs if e['code'] == holding_code), None)
         if held is None:
             continue
 
         current_value = shares * held['price']
 
-        # Switch to lowest premium
-        if lowest['code'] != holding_code:
-            cash = current_value
-            holding_code = lowest['code']
+        # 切换条件: 持有溢价比最低溢价高 threshold (T=1 时, 高 1%)
+        if (lowest['code'] != holding_code
+                and (held['premium_rate'] - lowest['premium_rate']) >= threshold):
+            cash = current_value  # 无成本
             shares = cash / lowest['price']
+            holding_code = lowest['code']
             current_value = cash
 
         result[date] = round(current_value, 2)
@@ -505,6 +541,79 @@ def compute_equal_weight(conn, index_type, codes, dates):
         eq_dates[date] = total
 
     return eq_shares, eq_dates
+
+
+def generate_json(conn, index_type, strategy_name, threshold, pool_codes, codes, code_to_name, trades, output_path):
+    """生成 rotation_{index}.json。"""
+    rows = conn.execute("""
+        SELECT date, holding_code, rotation_value, equal_weight_value
+        FROM rotation_index WHERE strategy = ? ORDER BY date
+    """, (strategy_name,)).fetchall()
+
+    if not rows:
+        print(f"  {index_type}: No data to generate JSON")
+        return
+
+    dates = [r['date'] for r in rows]
+    rotation_values = [r['rotation_value'] for r in rows]
+    equal_weight_values = [r['equal_weight_value'] for r in rows]
+    holdings = [r['holding_code'] for r in rows]
+
+    print(f"  {index_type}: Computing min-premium strategy...")
+    mp_values_map = simulate_min_premium(conn, codes, dates)
+    min_premium_values = [mp_values_map.get(d, INITIAL_VALUE) for d in dates]
+
+    final_rv = rotation_values[-1]
+    final_ev = equal_weight_values[-1]
+    final_mp = min_premium_values[-1] if min_premium_values else INITIAL_VALUE
+    rotation_return = (final_rv / INITIAL_VALUE - 1) * 100
+    equal_weight_return = (final_ev / INITIAL_VALUE - 1) * 100
+    min_premium_return = (final_mp / INITIAL_VALUE - 1) * 100
+
+    pool_names = {code: code_to_name.get(code, code) for code in pool_codes}
+
+    for t in trades:
+        t['min_premium_value'] = round(mp_values_map.get(t['date'], INITIAL_VALUE), 2)
+
+    data = {
+        'index_type': index_type,
+        'strategy': strategy_name,
+        'pool': pool_codes,
+        'pool_names': pool_names,
+        'threshold': threshold,
+        'initial_value': INITIAL_VALUE,
+        'start_date': dates[0],
+        'end_date': dates[-1],
+        'trading_days': len(dates),
+        'formula': 'score = NAV涨幅×10% + (-综合超额)×80% + (-当前溢价)×10% + 推荐加分(±0.5)',
+        'equal_weight_etfs': len(codes),
+        'summary': {
+            'rotation_value': round(final_rv, 2),
+            'rotation_return': round(rotation_return, 2),
+            'equal_weight_value': round(final_ev, 2),
+            'equal_weight_return': round(equal_weight_return, 2),
+            'alpha': round(rotation_return - equal_weight_return, 2),
+            'min_premium_value': round(final_mp, 2),
+            'min_premium_return': round(min_premium_return, 2),
+            'trade_count': len(trades),
+            'current_holding': holdings[-1],
+            'current_holding_name': code_to_name.get(holdings[-1], holdings[-1]),
+        },
+        'daily': {
+            'dates': dates,
+            'rotation_values': rotation_values,
+            'equal_weight_values': equal_weight_values,
+            'min_premium_values': min_premium_values,
+            'holdings': holdings,
+        },
+        'trades': trades,
+        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    print(f"  JSON: {output_path.name} ({len(dates)} days, {len(trades)} trades)")
+    return data
 
 
 def process_index(conn, index_type, pool_cfg, args):
@@ -564,6 +673,10 @@ def process_index(conn, index_type, pool_cfg, args):
 
     print(f"模拟{strategy_name}(阈值={threshold})...")
     result_rows, trades = simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, code_to_name)
+
+    # 生成 JSON 输出
+    output_file = OUTPUT_DIR / f'rotation_{index_type.lower()}.json'
+    generate_json(conn, index_type, strategy_name, threshold, pool_codes, codes, code_to_name, trades, output_file)
 
     print(f"完成{index_type}处理: {len(result_rows)}条记录")
 

@@ -1,293 +1,321 @@
 {
-  "date": "2026-05-11",
-  "timestamp": "2026-05-11T08:31:26.736335",
+  "date": "2026-05-17",
+  "timestamp": "2026-05-17T17:33:45.545707",
   "etfs": [
     {
       "code": "513100",
       "name": "国泰纳指ETF",
-      "price": 2.065,
-      "nav": 1.9531,
-      "premium_rate": 5.729353335722691
+      "price": 2.1,
+      "nav": 2.02,
+      "premium_rate": 3.960396039603964
     },
     {
       "code": "159941",
       "name": "广发纳指ETF",
-      "price": 1.54,
-      "nav": 1.4652,
-      "premium_rate": 5.105105105105103
+      "price": 1.564,
+      "nav": 1.5155,
+      "premium_rate": 3.200263939293961
     },
     {
       "code": "159660",
       "name": "汇添富纳指ETF",
-      "price": 2.211,
-      "nav": 2.1326,
-      "premium_rate": 3.6762637156522464
+      "price": 2.25,
+      "nav": 2.2056,
+      "premium_rate": 2.0130576713819366
     },
     {
       "code": "159501",
       "name": "嘉实纳指ETF",
-      "price": 1.906,
-      "nav": 1.8332,
-      "premium_rate": 3.9711979053022026
+      "price": 1.96,
+      "nav": 1.896,
+      "premium_rate": 3.3755274261603407
     },
     {
       "code": "159632",
       "name": "华安纳指ETF",
-      "price": 2.29,
-      "nav": 2.2155,
-      "premium_rate": 3.36267208305123
+      "price": 2.326,
+      "nav": 2.2914,
+      "premium_rate": 1.5099938901981402
     },
     {
       "code": "159659",
       "name": "招商纳指ETF",
-      "price": 2.174,
-      "nav": 2.1016,
-      "premium_rate": 3.444994290064714
+      "price": 2.21,
+      "nav": 2.1736,
+      "premium_rate": 1.6746411483253583
     },
     {
       "code": "513300",
       "name": "华夏纳指ETF",
-      "price": 2.521,
-      "nav": 2.421,
-      "premium_rate": 4.130524576621235
+      "price": 2.548,
+      "nav": 2.5019,
+      "premium_rate": 1.842599624285544
     },
     {
       "code": "513870",
       "name": "富国纳指ETF",
-      "price": 1.926,
-      "nav": 1.8592,
-      "premium_rate": 3.592943201376935
+      "price": 1.96,
+      "nav": 1.923,
+      "premium_rate": 1.9240769630785188
     },
     {
       "code": "513390",
       "name": "博时纳指ETF",
-      "price": 2.279,
-      "nav": 2.1894,
-      "premium_rate": 4.092445418836206
+      "price": 2.311,
+      "nav": 2.2645,
+      "premium_rate": 2.0534334290130265
     },
     {
       "code": "513110",
       "name": "南方纳指ETF",
-      "price": 2.318,
-      "nav": 2.2433,
-      "premium_rate": 3.3299157491196
+      "price": 2.355,
+      "nav": 2.3198,
+      "premium_rate": 1.5173721872575274
     },
     {
       "code": "161130",
       "name": "纳斯达克100LOF",
-      "price": 4.346,
-      "nav": 4.3409,
-      "premium_rate": 0.11748715704115874
+      "price": 4.41,
+      "nav": 4.4835,
+      "premium_rate": -1.6393442622950845
     },
     {
       "code": "513500",
       "name": "博时标普ETF",
-      "price": 2.483,
-      "nav": 2.3766,
-      "premium_rate": 4.476983926617869
+      "price": 2.48,
+      "nav": 2.4274,
+      "premium_rate": 2.166927576831177
     },
     {
       "code": "159655",
       "name": "华夏标普ETF",
-      "price": 1.854,
-      "nav": 1.8162,
-      "premium_rate": 2.0812685827552064
+      "price": 1.858,
+      "nav": 1.8535,
+      "premium_rate": 0.24278392230915408
     },
     {
       "code": "513650",
       "name": "南方标普ETF",
-      "price": 1.839,
-      "nav": 1.8095,
-      "premium_rate": 1.6302846090080054
+      "price": 1.846,
+      "nav": 1.8477,
+      "premium_rate": -0.09200627807543502
     },
     {
       "code": "159612",
       "name": "国泰标普ETF",
-      "price": 1.91,
-      "nav": 1.8656,
-      "premium_rate": 2.3799313893653515
+      "price": 1.922,
+      "nav": 1.9053,
+      "premium_rate": 0.8765023880753654
     },
     {
       "code": "161125",
       "name": "标普500LOF",
-      "price": 3.056,
-      "nav": 3.0491,
-      "premium_rate": 0.22629628414941808
+      "price": 3.069,
+      "nav": 3.1107,
+      "premium_rate": -1.3405342848876483
     },
     {
       "code": "513400",
       "name": "国泰道琼斯ETF",
-      "price": 1.242,
-      "nav": 1.2314,
-      "premium_rate": 0.8608088354718161
+      "price": 1.236,
+      "nav": 1.2415,
+      "premium_rate": -0.4430124848973065
     },
     {
       "code": "513030",
       "name": "德国ETF华安",
-      "price": 1.837,
-      "nav": 1.8146,
-      "premium_rate": 1.2344318307064905
+      "price": 1.776,
+      "nav": 1.7879,
+      "premium_rate": -0.6655853235639589
     },
     {
       "code": "159561",
       "name": "德国ETF嘉实",
-      "price": 1.327,
-      "nav": 1.3279,
-      "premium_rate": -0.06777618796597054
+      "price": 1.29,
+      "nav": 1.3081,
+      "premium_rate": -1.3836862625181565
     },
     {
       "code": "159866",
       "name": "日经ETF工银",
-      "price": 1.604,
-      "nav": 1.5983,
-      "premium_rate": 0.3566289182256171
+      "price": 1.554,
+      "nav": 1.5512,
+      "premium_rate": 0.18050541516246363
     },
     {
       "code": "513000",
       "name": "日经225ETF易方达",
-      "price": 2.162,
-      "nav": 2.1429,
-      "premium_rate": 0.891315507023188
+      "price": 2.09,
+      "nav": 2.0795,
+      "premium_rate": 0.5049290694878554
     },
     {
       "code": "513520",
       "name": "日经ETF华夏",
-      "price": 2.159,
-      "nav": 2.1288,
-      "premium_rate": 1.4186396091694748
+      "price": 2.085,
+      "nav": 2.0626,
+      "premium_rate": 1.0860079511296301
     },
     {
       "code": "513880",
       "name": "日经225ETF华安",
-      "price": 2.002,
-      "nav": 1.986,
-      "premium_rate": 0.80563947633433
+      "price": 1.938,
+      "nav": 1.9327,
+      "premium_rate": 0.27422776426759765
     },
     {
       "code": "159509",
       "name": "纳指科技ETF",
-      "price": 2.542,
-      "nav": 2.1449,
-      "premium_rate": 18.513683621614064
+      "price": 2.554,
+      "nav": 2.2345,
+      "premium_rate": 14.298500783172955
     },
     {
       "code": "159529",
       "name": "标普消费ETF",
-      "price": 1.316,
-      "nav": 1.3226,
-      "premium_rate": -0.4990170875548117
+      "price": 1.308,
+      "nav": 1.3262,
+      "premium_rate": -1.3723420298597493
     },
     {
       "code": "513290",
       "name": "美国生物ETF",
-      "price": 1.463,
-      "nav": 1.4665,
-      "premium_rate": -0.23866348448686237
+      "price": 1.464,
+      "nav": 1.4851,
+      "premium_rate": -1.4207797454716933
     },
     {
       "code": "513080",
       "name": "法国CAC40ETF",
-      "price": 1.793,
-      "nav": 1.7502,
-      "premium_rate": 2.445434807450574
+      "price": 1.736,
+      "nav": 1.7223,
+      "premium_rate": 0.7954479475120506
     },
     {
       "code": "501312",
       "name": "海外科技LOF",
-      "price": 2.211,
-      "nav": 2.2219,
-      "premium_rate": -0.49057113281427395
+      "price": 2.216,
+      "nav": 2.2755,
+      "premium_rate": -2.6148099318830975
     },
     {
       "code": "162415",
       "name": "美国消费LOF",
-      "price": 2.957,
-      "nav": 2.971,
-      "premium_rate": -0.47122181083810954
+      "price": 2.895,
+      "nav": 2.938,
+      "premium_rate": -1.463580667120495
     },
     {
       "code": "161128",
       "name": "标普科技LOF",
-      "price": 6.427,
-      "nav": 6.3307,
-      "premium_rate": 1.5211587976053103
+      "price": 6.576,
+      "nav": 6.6563,
+      "premium_rate": -1.2063759145471247
     },
     {
       "code": "160140",
       "name": "美国REIT LOF",
-      "price": 1.401,
-      "nav": 1.4106,
-      "premium_rate": -0.6805614632071496
+      "price": 1.4,
+      "nav": 1.4105,
+      "premium_rate": -0.7444168734491439
     },
     {
       "code": "161126",
       "name": "标普医药LOF",
-      "price": 1.84,
-      "nav": 1.8094,
-      "premium_rate": 1.6911683430971696
+      "price": 1.822,
+      "nav": 1.7963,
+      "premium_rate": 1.4307186995490762
     },
     {
       "code": "161127",
       "name": "标普生物LOF",
-      "price": 1.803,
-      "nav": 1.8083,
-      "premium_rate": -0.29309296023890297
+      "price": 1.793,
+      "nav": 1.8206,
+      "premium_rate": -1.5159837416236444
     },
     {
       "code": "162411",
       "name": "华宝油气LOF",
-      "price": 0.875,
-      "nav": 0.884,
-      "premium_rate": -1.018099547511313
+      "price": 0.894,
+      "nav": 0.8979,
+      "premium_rate": -0.43434680922151847
     },
     {
       "code": "164824",
       "name": "印度LOF",
-      "price": 1.316,
-      "nav": 1.3353,
-      "premium_rate": -1.445368082078924
+      "price": 1.275,
+      "nav": 1.2962,
+      "premium_rate": -1.6355500694337377
     },
     {
       "code": "160719",
       "name": "嘉实黄金LOF",
-      "price": 2.114,
-      "nav": 2.127,
-      "premium_rate": -0.6111894687353033
+      "price": 2.047,
+      "nav": 2.102,
+      "premium_rate": -2.6165556612749628
     },
     {
       "code": "161116",
       "name": "易方达黄金LOF",
-      "price": 1.789,
-      "nav": 1.7581,
-      "premium_rate": 1.7575792048233847
+      "price": 1.718,
+      "nav": 1.7383,
+      "premium_rate": -1.1678076281424372
     },
     {
       "code": "160723",
       "name": "嘉实原油LOF",
-      "price": 2.189,
-      "nav": 2.0788,
-      "premium_rate": 5.30113527034827
+      "price": 2.235,
+      "nav": 2.1877,
+      "premium_rate": 2.162088037665123
     },
     {
       "code": "161129",
       "name": "易方达原油LOF",
-      "price": 1.911,
-      "nav": 1.7284,
-      "premium_rate": 10.564684100902575
+      "price": 1.919,
+      "nav": 1.8269,
+      "premium_rate": 5.041326837812692
     },
     {
       "code": "160216",
       "name": "国泰商品LOF",
-      "price": 0.741,
-      "nav": 0.746,
-      "premium_rate": -0.6702412868632714
+      "price": 0.759,
+      "nav": 0.774,
+      "premium_rate": -1.9379844961240327
+    },
+    {
+      "code": "161715",
+      "name": "招商大宗商品LOF",
+      "price": 2.396,
+      "nav": 2.4139,
+      "premium_rate": -0.7415385890053452
+    },
+    {
+      "code": "161810",
+      "name": "银华内需LOF",
+      "price": 4.75,
+      "nav": 4.784,
+      "premium_rate": -0.7107023411371198
+    },
+    {
+      "code": "160644",
+      "name": "港美互联网LOF",
+      "price": 2.132,
+      "nav": 2.024,
+      "premium_rate": 5.335968379446645
+    },
+    {
+      "code": "501225",
+      "name": "全球芯片LOF",
+      "price": 3.938,
+      "nav": 3.0964,
+      "premium_rate": 27.17995091073505
     }
   ],
   "summary": {
-    "total": 40,
-    "success": 40,
-    "avg_premium": 2.3056043285066634,
-    "min_premium": -1.445368082078924,
-    "max_premium": 18.513683621614064
+    "total": 44,
+    "success": 44,
+    "avg_premium": 1.3522796501641696,
+    "min_premium": -2.6165556612749628,
+    "max_premium": 27.17995091073505
   }
 }

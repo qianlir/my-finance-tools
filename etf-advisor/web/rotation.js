@@ -116,17 +116,75 @@ function _rotRenderChart(canvasId, data) {
   });
 }
 
+/* ── 指数选择器 (Tab) ── */
+var INDEX_LABELS = { NASDAQ: '纳指', SP500: '标普500', NIKKEI: '日经225', DAX: '德国DAX' };
+
+function _rotIndexTabs(isMobile) {
+  var ce = React.createElement;
+  var all = window.ROTATION_ALL || {};
+  var current = window.ROTATION_CURRENT_INDEX || 'NASDAQ';
+  var indices = ['NASDAQ', 'SP500', 'NIKKEI', 'DAX'].filter(function(k) { return all[k]; });
+  if (indices.length === 0) return null;
+
+  return ce('div', {
+    style: {
+      display: 'flex', gap: isMobile ? 4 : 8,
+      marginBottom: isMobile ? 14 : 18,
+      borderBottom: '1px solid var(--ink-10)',
+      paddingBottom: 0,
+      overflowX: 'auto',
+    }
+  }, indices.map(function(k) {
+    var active = k === current;
+    var summary = all[k] && all[k].summary;
+    var alpha = summary ? summary.alpha : null;
+    return ce('button', {
+      key: k,
+      onClick: function() { window.switchRotationIndex(k); },
+      style: {
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? '2px solid #a8342a' : '2px solid transparent',
+        padding: isMobile ? '8px 10px' : '10px 16px',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-ui)',
+        fontSize: isMobile ? 12 : 13,
+        fontWeight: active ? 600 : 400,
+        color: active ? '#a8342a' : 'var(--fg-2)',
+        whiteSpace: 'nowrap',
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 6,
+      }
+    },
+      INDEX_LABELS[k] || k,
+      alpha != null ? ce('span', {
+        style: {
+          fontFamily: 'var(--font-mono)',
+          fontSize: isMobile ? 10 : 11,
+          fontWeight: 400,
+          color: alpha > 0 ? '#2A6B4F' : alpha < 0 ? '#A8342A' : 'var(--fg-muted)',
+        }
+      }, (alpha > 0 ? '+' : '') + alpha.toFixed(1) + '%') : null
+    );
+  }));
+}
+
 /* ── PC Rotation ── */
 function PCRotation() {
   var data = window.ROTATION;
   var ce = React.createElement;
+  var current = window.ROTATION_CURRENT_INDEX || 'NASDAQ';
 
   React.useEffect(function() {
     if (data) setTimeout(function() { _rotRenderChart('rot-chart-pc', data); }, 50);
     return function() { if (_rotChartInstance) { _rotChartInstance.destroy(); _rotChartInstance = null; } };
-  }, [data]);
+  }, [data, current]);
 
-  if (!data) return ce('div', { style: { padding: 60, textAlign: 'center', color: 'var(--fg-muted)', fontFamily: 'var(--font-ui)', fontSize: 14 } }, '轮动指数数据加载中...');
+  if (!data) return ce('div', { style: { padding: 60, textAlign: 'center', color: 'var(--fg-muted)', fontFamily: 'var(--font-ui)', fontSize: 14 } },
+    ce('div', null, _rotIndexTabs(false)),
+    '轮动指数数据加载中...'
+  );
 
   var s = data.summary;
   var pool = data.pool || [];
@@ -151,14 +209,21 @@ function PCRotation() {
   var tradeRows = data.trades.slice().reverse().map(function(t) {
     var isInit = t.action === '建仓';
     var leadColor = (t.lead || 0) > 0 ? '#2A6B4F' : (t.lead || 0) < 0 ? '#A8342A' : 'var(--fg-3)';
+    var premiumDiffColor = (t.premium_diff || 0) > 0 ? '#2A6B4F' : (t.premium_diff || 0) < 0 ? '#A8342A' : 'var(--fg-3)';
     return ce('tr', { key: t.seq, style: { background: isInit ? 'var(--ink-05)' : 'transparent' } },
       ce('td', { style: { textAlign: 'center', color: 'var(--fg-muted)' } }, t.seq),
       ce('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 12 } }, t.date),
       ce('td', null, t.action),
       ce('td', { style: { color: '#A8342A' } }, t.sell_name ? etfLabel(t.sell_code) : '—'),
+      ce('td', { style: { fontFamily: 'var(--font-mono)' } },
+        t.sell_premium != null ? t.sell_premium.toFixed(2) + '%' : '—'),
       ce('td', { style: { fontFamily: 'var(--font-mono)' } }, _rotFmtScore(t.sell_score)),
       ce('td', { style: { color: '#2A6B4F' } }, etfLabel(t.buy_code)),
+      ce('td', { style: { fontFamily: 'var(--font-mono)' } },
+        t.buy_premium != null ? t.buy_premium.toFixed(2) + '%' : '—'),
       ce('td', { style: { fontFamily: 'var(--font-mono)' } }, _rotFmtScore(t.buy_score)),
+      ce('td', { style: { fontFamily: 'var(--font-mono)', color: premiumDiffColor } },
+        t.premium_diff != null ? (t.premium_diff > 0 ? '+' : '') + t.premium_diff.toFixed(2) + '%' : '—'),
       ce('td', { style: { fontFamily: 'var(--font-mono)', color: (t.score_diff || 0) > 0 ? '#2A6B4F' : 'var(--fg-3)' } },
         t.score_diff != null ? (t.score_diff > 0 ? '+' : '') + t.score_diff.toFixed(2) : '—'),
       ce('td', { style: { fontFamily: 'var(--font-mono)', textAlign: 'right' } }, _rotFmtMoney(t.rotation_value)),
@@ -175,9 +240,12 @@ function PCRotation() {
   var tdBase = { padding: '9px 8px', textAlign: 'right', borderBottom: '1px solid var(--ink-05)', fontSize: 13 };
 
   return ce('div', { style: { maxWidth: 1200, margin: '0 auto', padding: '24px 32px 48px' } },
+    // 指数选择 tab
+    _rotIndexTabs(false),
+
     // Subtitle
     ce('div', { style: { fontFamily: 'var(--font-ui)', fontSize: 11, color: 'var(--fg-muted)', marginBottom: 20 } },
-      data.start_date + ' ~ ' + data.end_date + ' · ' + data.trading_days + '交易日 · 当前持有: ' + s.current_holding_name + ' · T=' + data.threshold
+      (INDEX_LABELS[current] || current) + ' · ' + data.start_date + ' ~ ' + data.end_date + ' · ' + data.trading_days + '交易日 · 当前持有: ' + s.current_holding_name + ' · T=' + data.threshold
     ),
 
     // Metrics grid
@@ -223,9 +291,12 @@ function PCRotation() {
           ce('th', thL, '日期'),
           ce('th', thL, '操作'),
           ce('th', thL, '卖出'),
+          ce('th', thStyle, '卖出溢价'),
           ce('th', thStyle, '卖出分值'),
           ce('th', thL, '买入'),
+          ce('th', thStyle, '买入溢价'),
           ce('th', thStyle, '买入分值'),
+          ce('th', thStyle, '溢价差'),
           ce('th', thStyle, '分差'),
           ce('th', thStyle, '策略市值'),
           ce('th', thStyle, '最低溢价'),
@@ -248,13 +319,17 @@ function PCRotation() {
 function MobRotation() {
   var data = window.ROTATION;
   var ce = React.createElement;
+  var current = window.ROTATION_CURRENT_INDEX || 'NASDAQ';
 
   React.useEffect(function() {
     if (data) setTimeout(function() { _rotRenderChart('rot-chart-mob', data); }, 50);
     return function() { if (_rotChartInstance) { _rotChartInstance.destroy(); _rotChartInstance = null; } };
-  }, [data]);
+  }, [data, current]);
 
-  if (!data) return ce('div', { style: { padding: 60, textAlign: 'center', color: 'var(--fg-muted)', fontFamily: 'var(--font-ui)', fontSize: 13 } }, '加载中...');
+  if (!data) return ce('div', { style: { padding: '14px 16px 60px', color: 'var(--fg-muted)', fontFamily: 'var(--font-ui)', fontSize: 13 } },
+    _rotIndexTabs(true),
+    ce('div', { style: { textAlign: 'center', padding: 30 } }, '加载中...')
+  );
 
   var s = data.summary;
   var poolNames = data.pool_names || {};
@@ -290,15 +365,26 @@ function MobRotation() {
           ? ce(React.Fragment, null,
               ce('span', { style: { color: '#A8342A' } }, sellShort),
               ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, t.sell_code),
+              t.sell_premium != null
+                ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)' } }, t.sell_premium.toFixed(1) + '%')
+                : null,
               ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, _rotFmtScore(t.sell_score)),
               ce('span', { style: { color: 'var(--fg-muted)', margin: '0 2px' } }, '→')
             )
           : null,
         ce('span', { style: { fontWeight: 500, color: '#2A6B4F' } }, buyShort),
         ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, t.buy_code),
+        t.buy_premium != null
+          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)' } }, t.buy_premium.toFixed(1) + '%')
+          : null,
         ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' } }, _rotFmtScore(t.buy_score)),
+        t.premium_diff != null && sellShort
+          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, marginLeft: 4,
+              color: t.premium_diff > 0 ? '#2A6B4F' : t.premium_diff < 0 ? '#A8342A' : 'var(--fg-3)' } },
+              '溢' + (t.premium_diff > 0 ? '+' : '') + t.premium_diff.toFixed(1))
+          : null,
         t.score_diff != null
-          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: '#2A6B4F', marginLeft: 4 } }, '△' + t.score_diff.toFixed(1))
+          ? ce('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: '#2A6B4F', marginLeft: 4 } }, '分△' + t.score_diff.toFixed(1))
           : null
       ),
       // Row 3: portfolio values
@@ -311,9 +397,12 @@ function MobRotation() {
   });
 
   return ce('div', { style: { padding: '12px 16px 68px' } },
+    // 指数选择 tab
+    _rotIndexTabs(true),
+
     // Info line
     ce('div', { style: { fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-muted)', marginBottom: 10 } },
-      '持有: ' + s.current_holding_name + ' · T=' + data.threshold + ' · ' + data.generated_at
+      (INDEX_LABELS[current] || current) + ' · 持有: ' + s.current_holding_name + ' · T=' + data.threshold + ' · ' + data.generated_at
     ),
 
     // Metrics 2×3

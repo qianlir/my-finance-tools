@@ -2971,12 +2971,21 @@ function App() {
     return React.createElement(React.Fragment, null,
       React.createElement(PCNav, { tab: tab, setTab: switchTab }),
       React.createElement('div', { className: 'fade-in', key: pageKey }, page),
-      React.createElement('div', { className: 'ft' }, '© 2026 千里知投 · 数据仅供参考，不构成投资建议')
+      React.createElement('div', { className: 'ft' },
+        React.createElement('div', null, '\u00a9 2026 千里知投 · 数据仅供参考，不构成投资建议'),
+        React.createElement('div', { style: { marginTop: 6, letterSpacing: '0.04em', textTransform: 'none' } },
+          React.createElement('a', { href: 'https://beian.miit.gov.cn/', target: '_blank', rel: 'noopener' }, '浙ICP备2026031343号')
+        )
+      )
     );
   }
 
   return React.createElement('div', { className: 'mob' },
     React.createElement('div', { className: 'fade-in', key: pageKey, style: { minHeight: '100vh' } }, page),
+    React.createElement('div', { style: { padding: '12px 16px 56px', textAlign: 'center', fontFamily: 'var(--font-ui)', fontSize: 9, color: 'var(--fg-muted)' } },
+      React.createElement('div', null, '\u00a9 2026 千里知投 · 数据仅供参考'),
+      React.createElement('a', { href: 'https://beian.miit.gov.cn/', target: '_blank', rel: 'noopener', style: { color: 'var(--fg-muted)', textDecoration: 'none' } }, '浙ICP备2026031343号')
+    ),
     React.createElement(MobTabs, { tab: tab, setTab: switchTab })
   );
 }

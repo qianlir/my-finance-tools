@@ -52,8 +52,8 @@ def run_update():
             capture_output=True
         )
         subprocess.run(
-            [python_cmd, str(SCRIPT_DIR / "calc_rotation_index.py"), "--threshold", "1"],
-            cwd=str(PROJECT_ROOT), timeout=120, check=True,
+            [python_cmd, str(SCRIPT_DIR / "calc_rotation_index.py"), "--index", "all"],
+            cwd=str(PROJECT_ROOT), timeout=180, check=True,
             capture_output=True
         )
         subprocess.run(

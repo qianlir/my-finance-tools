@@ -18,6 +18,10 @@ rsync -avz "$LOCAL_DIR/memory/knowledge/etf/" "$REMOTE:$REMOTE_DIR/memory/knowle
 rsync -avz "$LOCAL_DIR/data/etf_premium.db" "$REMOTE:$REMOTE_DIR/data/"
 [ -f "$LOCAL_DIR/data/report.json" ] && rsync -avz "$LOCAL_DIR/data/report.json" "$REMOTE:$REMOTE_DIR/data/"
 [ -f "$LOCAL_DIR/data/rotation_index.json" ] && rsync -avz "$LOCAL_DIR/data/rotation_index.json" "$REMOTE:$REMOTE_DIR/data/"
+# 多指数轮动 JSON (NASDAQ/SP500/NIKKEI/DAX)
+for idx in nasdaq sp500 nikkei dax; do
+  [ -f "$LOCAL_DIR/data/rotation_${idx}.json" ] && rsync -avz "$LOCAL_DIR/data/rotation_${idx}.json" "$REMOTE:$REMOTE_DIR/data/"
+done
 
 echo "=== Setting up venv + deps ==="
 ssh $REMOTE "cd $REMOTE_DIR && python3 -m venv venv && venv/bin/pip install -q requests"
