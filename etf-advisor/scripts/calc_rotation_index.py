@@ -71,6 +71,7 @@ WEIGHTS = {'1M': 0.35, '3M': 0.25, '6M': 0.20, '1Y': 0.10, 'ALL': 0.10}
 DATA_START_DATE = '2025-01-01'
 DEFAULT_START = '2025-01-02'
 INITIAL_VALUE = 10000.0
+VOL_WINDOW = 90  # tracking_vol 滚动窗口 (天数)
 
 
 def load_pool_config(index_type):
@@ -206,28 +207,72 @@ def compute_nav_return_1y(premium_by_code, code, current_date_str, daily_data):
     return 0.0
 
 
+def _compute_tracking_vols(codes, pool_codes_set, target_date, daily_data, window_days=VOL_WINDOW):
+    """计算 target_date 这天每只 ETF 的 tracking_vol (滚动N天).
+    tracking_vol = stdev(每日涨跌% - 池均值涨跌%) 过去 N 天.
+    """
+    sorted_dates = sorted(d for d in daily_data.keys() if d < target_date)
+    if not sorted_dates:
+        return {c: 0.0 for c in codes}
+    # 只取最近 window_days*2 天 (留余地, 因为周末跳过)
+    window_start_idx = max(0, len(sorted_dates) - window_days * 2)
+    recent_dates = sorted_dates[window_start_idx:]
+
+    # 计算每只 ETF 在这段时间的每日涨跌幅
+    returns_by_code = {}
+    for code in codes:
+        returns = []
+        for i in range(1, len(recent_dates)):
+            d_now, d_prev = recent_dates[i], recent_dates[i - 1]
+            info_now = daily_data.get(d_now, {}).get(code)
+            info_prev = daily_data.get(d_prev, {}).get(code)
+            if not info_now or not info_prev: continue
+            p_now = info_now.get('price', 0)
+            p_prev = info_prev.get('price', 0)
+            if p_prev and p_prev > 0:
+                returns.append((d_now, (p_now / p_prev - 1) * 100))
+        returns_by_code[code] = dict(returns)
+
+    # 对每只池内 ETF, 计算 tracking_vol = stdev(my_ret - peer_mean_ret)
+    vols = {}
+    for code in codes:
+        if code not in pool_codes_set:
+            vols[code] = 0.0
+            continue
+        diffs = []
+        for d, my_ret in returns_by_code[code].items():
+            peer_rets = [returns_by_code[c2].get(d) for c2 in pool_codes_set if c2 != code]
+            peer_rets = [r for r in peer_rets if r is not None]
+            if not peer_rets: continue
+            diffs.append(my_ret - sum(peer_rets) / len(peer_rets))
+            if len(diffs) >= window_days: break
+        if len(diffs) > 1:
+            mean = sum(diffs) / len(diffs)
+            var = sum((d - mean) ** 2 for d in diffs) / (len(diffs) - 1)
+            vols[code] = var ** 0.5
+        else:
+            vols[code] = 0.0
+    return vols
+
+
 def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, daily_data, pool_cfg):
     """计算所有交易日指定指数ETF的评分，写入 rotation_scores。
 
-    评分公式 (z-score 标准化, abc 满足 a+b+c=1):
+    4 因子评分公式 (无标准化, 直接用原始值):
         nav_excess = NAV_return_1y - 池均值
-        F = (nav_excess/σ_nav) * a + (-composite/σ_excess) * b + (-premium/σ_premium) * c
+        F = nav_excess·a + (-composite)·b + (-premium)·c + tracking_vol·d
+        pool_score = F + bonus
 
-    其中 σ_nav, σ_excess, σ_premium 是池内全期标准差, 从 rotation-pool.json 的 sigmas 字段读取.
-    标准化使分值落在 [-10, +10] 内, T 仍然自由设置 (从 threshold 字段读取).
+    abcd 从 rotation-pool.json 的 formula 字段读取, 满足 a+b+c+d=1.
+    tracking_vol = 90天滚动 stdev(每日涨跌 - 池均值涨跌), 反映套利空间.
     """
     pool = pool_cfg.get('pool', {})
     default_bonus = pool_cfg.get('default_bonus', -0.5)
-    formula = pool_cfg.get('formula', {'a': 0.10, 'b': 0.80, 'c': 0.10})
+    formula = pool_cfg.get('formula', {'a': 0.10, 'b': 0.70, 'c': 0.10, 'd': 0.10})
     w_nav = formula.get('a', 0.10)
-    w_excess = formula.get('b', 0.80)
+    w_excess = formula.get('b', 0.70)
     w_premium = formula.get('c', 0.10)
-
-    # z-score 标准化所需的 σ (从配置读取, 不在配置时用 1.0 退化为不标准化)
-    sigmas = pool_cfg.get('sigmas', {'nav': 1.0, 'excess': 1.0, 'premium': 1.0})
-    sig_nav = sigmas.get('nav', 1.0) or 1.0
-    sig_excess = sigmas.get('excess', 1.0) or 1.0
-    sig_premium = sigmas.get('premium', 1.0) or 1.0
+    w_vol = formula.get('d', 0.10)
 
     pool_codes_set = set(pool.keys()) if pool else set(codes)
 
@@ -252,6 +297,9 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
 
         pool_navs = [nav_1y_by_code[c] for c in nav_1y_by_code if c in pool_codes_set]
         nav_pool_mean = sum(pool_navs) / len(pool_navs) if pool_navs else 0.0
+
+        # 计算本日各 ETF 的 tracking_vol (滚动 N 天)
+        tracking_vols = _compute_tracking_vols(codes, pool_codes_set, date, daily_data)
 
         for code in codes:
             if code not in day_data:
@@ -284,12 +332,14 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
 
             nav_return_1y = nav_1y_by_code.get(code, 0.0)
             nav_excess = nav_return_1y - nav_pool_mean
+            tvol = tracking_vols.get(code, 0.0)
 
-            # z-score 标准化: 每个分量除以池内 σ
+            # 4 因子原始值公式 (无标准化)
             score = (
-                (nav_excess / sig_nav) * w_nav
-                + (-composite / sig_excess) * w_excess
-                + (-premium_rate / sig_premium) * w_premium
+                nav_excess * w_nav
+                + (-composite) * w_excess
+                + (-premium_rate) * w_premium
+                + tvol * w_vol
             )
 
             bonus = pool[code]['bonus'] if code in pool else default_bonus

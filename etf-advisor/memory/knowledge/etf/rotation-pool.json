@@ -1,16 +1,20 @@
 {
   "_meta": {
-    "schema_version": "v6",
+    "schema_version": "v8",
     "last_review": "2026-05-20",
-    "note": "评分公式: F = (nav_excess/σ_nav)·a + (-超额/σ_超额)·b + (-溢价/σ_溢价)·c, 换仓: (best_F - holding_F) >= T",
-    "formula_details": {
-      "nav_excess": "nav_return_1y - pool_mean(nav_return_1y), NAV相对强弱",
-      "超额": "composite_excess_premium, 加权多窗口超额溢价",
-      "溢价": "premium_rate, 当前溢价率",
-      "标准化": "每个分量除以池内全期 σ, z-score 标准化, 使分值落在 [-10, +10] 内"
+    "note": "4 因子评分公式 (无标准化, 直接用原始值, tracking_vol 等权90天窗口)",
+    "formula": "F = nav_excess·a + (-excess)·b + (-premium)·c + tracking_vol·d",
+    "switch_condition": "best_F - holding_F >= T",
+    "factor_details": {
+      "a_nav_excess": "NAV_return_1y - pool_mean(NAV_return_1y), 池内相对涨幅",
+      "b_excess": "(-composite_excess_premium), 多窗口加权超额溢价, 越低越好",
+      "c_premium": "(-premium_rate), 当前绝对溢价率, 越低越好",
+      "d_tracking_vol": "(+)90天滚动 stdev(每日涨跌% - 池均值涨跌%), 越大套利空间越大"
     },
-    "constraints": "a+b+c=1, abc≥0.1, T自由, 不扣交易成本",
-    "data_start": "2025-01-01"
+    "constraints": "a+b+c+d=1, abcd≥0.1, T∈[0.5,1.0], 不扣交易成本, 等权tracking_vol",
+    "data_start": "2025-01-01",
+    "vol_window_days": 90,
+    "vol_method": "equal_weight"
   },
   "NASDAQ": {
     "pool": {
@@ -20,17 +24,9 @@
       "513390": { "bonus": 0.0 }
     },
     "default_bonus": -999,
-    "threshold": 0.80,
-    "formula": { "a": 0.10, "b": 0.50, "c": 0.40 },
-    "sigmas": { "nav": 0.34, "excess": 2.38, "premium": 3.03 },
-    "note": "纳指 4 只精选池. b=0.5+c=0.4 平衡. 分值范围 [-5.0, +3.6]. 回测 +53.77% vs 等权 +25.36% (+28.41%), vs 纯溢价最优 +49.48% (+4.29%), 7次换仓",
-    "backtest": {
-      "rotation_return_pct": 53.77,
-      "switches": 7,
-      "vs_equal_weight_pct": 28.41,
-      "vs_best_pure_premium_pct": 4.29,
-      "score_range": [-5.0, 3.6]
-    }
+    "threshold": 0.90,
+    "formula": { "a": 0.10, "b": 0.70, "c": 0.10, "d": 0.10 },
+    "note": "纳指 4 只精选池. b=0.7 主导(历史超额溢价). 穷举最优 T∈[0.5,1.0]"
   },
   "SP500": {
     "pool": {
@@ -38,17 +34,9 @@
       "159612": { "bonus": 0.0 }
     },
     "default_bonus": -999,
-    "threshold": 0.30,
-    "formula": { "a": 0.10, "b": 0.40, "c": 0.50 },
-    "sigmas": { "nav": 0.36, "excess": 2.98, "premium": 5.07 },
-    "note": "标普 2 只精选池. c=0.5 主重溢价. 分值范围 [-5.6, +2.3]. 回测 +19.05% vs 等权 +11.65% (+7.40%), vs 纯溢价最优 +14.94% (+4.11%), 6次换仓",
-    "backtest": {
-      "rotation_return_pct": 19.05,
-      "switches": 6,
-      "vs_equal_weight_pct": 7.40,
-      "vs_best_pure_premium_pct": 4.11,
-      "score_range": [-5.6, 2.3]
-    }
+    "threshold": 0.50,
+    "formula": { "a": 0.10, "b": 0.70, "c": 0.10, "d": 0.10 },
+    "note": "标普 2 只精选池 (南方+国泰). b=0.7 抓国泰 159612 高溢价回归"
   },
   "NIKKEI": {
     "pool": {
@@ -58,17 +46,9 @@
       "513880": { "bonus": 0.0 }
     },
     "default_bonus": -999,
-    "threshold": 0.30,
-    "formula": { "a": 0.10, "b": 0.20, "c": 0.70 },
-    "sigmas": { "nav": 0.40, "excess": 1.80, "premium": 2.16 },
-    "note": "日经全池 4 只. c=0.7 重溢价. 分值范围 [-5.9, +0.9]. 回测 +65.92% vs 等权 +43.41% (+22.52%), vs 纯溢价最优 +60.18% (+5.74%), 23次换仓",
-    "backtest": {
-      "rotation_return_pct": 65.92,
-      "switches": 23,
-      "vs_equal_weight_pct": 22.52,
-      "vs_best_pure_premium_pct": 5.74,
-      "score_range": [-5.9, 0.9]
-    }
+    "threshold": 1.00,
+    "formula": { "a": 0.30, "b": 0.30, "c": 0.10, "d": 0.30 },
+    "note": "日经全池 4 只. 均衡型 a=b=d=0.3, 波动+动量+超额. 穷举最优"
   },
   "DAX": {
     "pool": {
@@ -76,16 +56,8 @@
       "159561": { "bonus": 0.0 }
     },
     "default_bonus": -999,
-    "threshold": 3.00,
-    "formula": { "a": 0.40, "b": 0.10, "c": 0.50 },
-    "sigmas": { "nav": 2.27, "excess": 4.26, "premium": 4.66 },
-    "note": "德国 2 只. T=3 高阈值, 只在极端事件(如 2025-01 嘉实炒作)切换. 分值范围 [-6.6, +0.5]. 回测 +71.53% vs 等权 +23.02% (+48.52%), vs 纯溢价最优 +40.71% (+30.81%), 2次换仓",
-    "backtest": {
-      "rotation_return_pct": 71.53,
-      "switches": 2,
-      "vs_equal_weight_pct": 48.52,
-      "vs_best_pure_premium_pct": 30.81,
-      "score_range": [-6.6, 0.5]
-    }
+    "threshold": 1.00,
+    "formula": { "a": 0.10, "b": 0.10, "c": 0.10, "d": 0.70 },
+    "note": "德国 2 只. d=0.7 重波动 (159561 经常炒作), T=1.0"
   }
 }
