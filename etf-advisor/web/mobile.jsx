@@ -111,12 +111,14 @@ function MobPremium({ activeIdx, setActiveIdx }) {
     const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
     const estNav = selFund.estimated_nav || (selFund.nav * r);
     const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
+    const estPrem = estNav > 0 ? (selFund.price - estNav) / estNav * 100 : 0;
     const holdings = selFund.holdings || [];
     const rows = [
       ['净值', selFund.nav.toFixed(3), null],
       ['估算净值', estNav.toFixed(3), chg(estChg)],
+      selFund.nav_formula ? ['公式', selFund.nav_formula, null] : null,
       ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
-      ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
+      ['估算溢价', fmtPct(estPrem), chg(estPrem)],
       ['3M均溢价', fmtPct(selFund.avg_3m), null],
       ['6M均溢价', fmtPct(selFund.avg_6m), null],
       ['1Y均溢价', fmtPct(selFund.avg_1y), null],
@@ -149,10 +151,14 @@ function MobPremium({ activeIdx, setActiveIdx }) {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500 }}>{selFund.price.toFixed(3)}</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: chg(selFund.change) }}>{fmtPct(selFund.change)}</span>
         </div>
-        {rows.map(([l, v, c]) => (
-          <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--ink-10)' }}>
+        {rows.filter(Boolean).map(([l, v, c]) => (
+          <div key={l} style={l === '公式'
+            ? { padding: '6px 0', borderBottom: '1px solid var(--ink-10)', wordBreak: 'break-all' }
+            : { display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--ink-10)' }}>
             <span style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: 'var(--fg-3)' }}>{l}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: c || 'var(--ink)' }}>{v}</span>
+            {l === '公式'
+              ? <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)', marginTop: 2, lineHeight: 1.5 }}>{v}</div>
+              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: c || 'var(--ink)' }}>{v}</span>}
           </div>
         ))}
         {holdings.length > 0 && (

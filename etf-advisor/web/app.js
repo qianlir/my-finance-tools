@@ -1816,8 +1816,9 @@ function MobPremium({
     const r = fc ? 1 + (fc.ratio_pct || 0) / 100 : 1;
     const estNav = selFund.estimated_nav || selFund.nav * r;
     const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
+    const estPrem = estNav > 0 ? (selFund.price - estNav) / estNav * 100 : 0;
     const holdings = selFund.holdings || [];
-    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(estChg)], ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
+    const rows = [['净值', selFund.nav.toFixed(3), null], ['估算净值', estNav.toFixed(3), chg(estChg)], selFund.nav_formula ? ['公式', selFund.nav_formula, null] : null, ['涨幅', fmtPct(selFund.change), chg(selFund.change)], ['估算溢价', fmtPct(estPrem), chg(estPrem)], ['3M均溢价', fmtPct(selFund.avg_3m), null], ['6M均溢价', fmtPct(selFund.avg_6m), null], ['1Y均溢价', fmtPct(selFund.avg_1y), null], ['溢价>7%天数', String(selFund.days_gt7), selFund.days_gt7 > 30 ? '#A8342A' : null], ['年净值涨幅', fmtPct(selFund.nav_return_1y), chg(selFund.nav_return_1y)], ['年价格涨幅', fmtPct(selFund.price_return_1y), chg(selFund.price_return_1y)], ['分值', selFund.score.toFixed(2), null]];
     if (selFund.subscription_status) {
       var subMap = {
         closed: '暂停申购',
@@ -1897,9 +1898,13 @@ function MobPremium({
         fontSize: 14,
         color: chg(selFund.change)
       }
-    }, fmtPct(selFund.change))), rows.map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+    }, fmtPct(selFund.change))), rows.filter(Boolean).map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
       key: l,
-      style: {
+      style: l === '公式' ? {
+        padding: '6px 0',
+        borderBottom: '1px solid var(--ink-10)',
+        wordBreak: 'break-all'
+      } : {
         display: 'flex',
         justifyContent: 'space-between',
         padding: '6px 0',
@@ -1911,7 +1916,15 @@ function MobPremium({
         fontSize: 12,
         color: 'var(--fg-3)'
       }
-    }, l), /*#__PURE__*/React.createElement("span", {
+    }, l), l === '公式' ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'var(--fg-muted)',
+        marginTop: 2,
+        lineHeight: 1.5
+      }
+    }, v) : /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: 'var(--font-mono)',
         fontSize: 12,
