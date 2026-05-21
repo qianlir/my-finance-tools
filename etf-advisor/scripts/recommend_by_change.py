@@ -1052,8 +1052,8 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                         display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
                         nav_formula = (
                             f"{nav:.3f} × {seg1_factor:.4f}(盘后) × "
-                            f"(1 + ({int(_nq_now)}/{int(_nq_anc)}-1)×{_betas['NQ']:.2f}"
-                            f" + ({int(_es_now)}/{int(_es_anc)}-1)×{_betas['ES']:.2f})"
+                            f"(1 + NQ({int(_nq_now)}/{int(_nq_anc)}-1)×β{_betas['NQ']:.2f}"
+                            f" + ES({int(_es_now)}/{int(_es_anc)}-1)×β{_betas['ES']:.2f})"
                             f" = {estimated_nav:.3f}"
                         )
                     else:
@@ -1081,7 +1081,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 if nav_date_close and current_futures_price:
                     estimated_nav = nav * (current_futures_price / nav_date_close)
                     display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                    nav_formula = f"{nav:.3f} × ({int(current_futures_price)}/{int(nav_date_close)}) = {estimated_nav:.3f}"
+                    nav_formula = f"{nav:.3f} × ({current_futures_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
                 else:
                     estimated_nav = nav
                     display_premium = current.get('premium_rate', 0)
@@ -1092,7 +1092,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 if nav_date_close and current_idx_price:
                     estimated_nav = nav * (current_idx_price / nav_date_close)
                     display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                    nav_formula = f"{nav:.3f} × ({int(current_idx_price)}/{int(nav_date_close)}) = {estimated_nav:.3f}"
+                    nav_formula = f"{nav:.3f} × ({current_idx_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
                 else:
                     estimated_nav = nav
                     display_premium = current.get('premium_rate', 0)
@@ -1106,7 +1106,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             if nav and nav_date_close and current_futures_price:
                 estimated_nav = nav * (current_futures_price / nav_date_close)
                 display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                nav_formula = f"{nav:.3f} × ({int(current_futures_price)}/{int(nav_date_close)}) = {estimated_nav:.3f}"
+                nav_formula = f"{nav:.3f} × ({current_futures_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
             elif nav:
                 estimated_nav = nav
                 display_premium = current.get('premium_rate', 0)
