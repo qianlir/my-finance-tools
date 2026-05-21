@@ -1223,7 +1223,8 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
         etf_pool_cfg = pool.get(r['code'])
         r['rotation_pool'] = etf_pool_cfg is not None
         r['rotation_bonus'] = etf_pool_cfg['bonus'] if etf_pool_cfg else pool_cfg.get('default_bonus', 0)
-        r['score'] += r['rotation_bonus']
+        r['display_score'] = round(r['score'], 2)  # 展示用分值 (不含池子 bonus)
+        r['score'] += r['rotation_bonus']           # 排序/推荐用分值 (含 bonus, 池外被压低)
 
     # 恐慌指数加分：纳指用VXN，标普用VIX
     _fear_bonus = _calc_fear_index_bonus(index_type)
@@ -1377,7 +1378,7 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "excess_nav_return": round(r.get('excess_nav_return', 0), 2),
                 "price_return_1y": round(r.get('price_return_1y', 0), 2),
                 "days_gt7": r['1Y_gt7'],
-                "score": round(r['score'], 2),
+                "score": r.get('display_score', round(r['score'], 2)),
                 "recommendation": rec_text,
                 "stars": stars,
                 "rotation_pool": r.get('rotation_pool', False),
