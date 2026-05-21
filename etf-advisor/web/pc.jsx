@@ -152,12 +152,14 @@ function PCPremium({ activeIdx, setActiveIdx }) {
     const r = fc ? (1 + (fc.ratio_pct || 0) / 100) : 1;
     const estNav = selFund.estimated_nav || (selFund.nav * r);
     const estChg = fc?.ratio_pct ?? (selFund.nav ? (estNav / selFund.nav - 1) * 100 : 0);
+    const estPrem = estNav > 0 ? (selFund.price - estNav) / estNav * 100 : 0;
     const holdings = selFund.holdings || [];
     const metrics = [
       ['净值', selFund.nav.toFixed(3), null],
       ['估算净值', estNav.toFixed(3), chg(estChg)],
+      selFund.nav_formula ? ['公式', selFund.nav_formula, null] : null,
       ['涨幅', fmtPct(selFund.change), chg(selFund.change)],
-      ['估算溢价', fmtPct(selFund.display_premium), chg(selFund.display_premium)],
+      ['估算溢价', fmtPct(estPrem), chg(estPrem)],
       ['3M均溢价', fmtPct(selFund.avg_3m), null],
       ['6M均溢价', fmtPct(selFund.avg_6m), null],
       ['1Y均溢价', fmtPct(selFund.avg_1y), null],
@@ -195,10 +197,12 @@ function PCPremium({ activeIdx, setActiveIdx }) {
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
-                {metrics.map(([l, v, c]) => (
+                {metrics.filter(Boolean).map(([l, v, c]) => (
                   <tr key={l}>
                     <td style={{ padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--fg-3)', width: '40%' }}>{l}</td>
-                    <td style={{ padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-mono)', fontSize: 13, color: c || 'var(--ink)', textAlign: 'right' }}>{v}</td>
+                    <td style={l === '公式'
+                      ? { padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right', wordBreak: 'break-all', lineHeight: 1.5 }
+                      : { padding: '6px 0', borderBottom: '1px solid var(--ink-10)', fontFamily: 'var(--font-mono)', fontSize: 13, color: c || 'var(--ink)', textAlign: 'right' }}>{v}</td>
                   </tr>
                 ))}
               </tbody>

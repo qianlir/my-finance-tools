@@ -105,14 +105,26 @@ fi
 echo ""
 echo "--- 页面加载 ---"
 
-for path in "/" "/m/" "/premium" "/m/premium" "/rotation" "/m/rotation"; do
-  status=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}${path}" 2>/dev/null || echo "000")
+if [ -n "$SERVER" ]; then
+  # 服务器有 nginx SPA 路由, 测试所有路径
+  for path in "/" "/m/" "/premium" "/m/premium" "/rotation" "/m/rotation"; do
+    status=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}${path}" 2>/dev/null || echo "000")
+    if [ "$status" = "200" ]; then
+      pass "${path} → HTTP ${status}"
+    else
+      fail "${path} → HTTP ${status}"
+    fi
+  done
+else
+  # 本地 python http.server 不支持 SPA 路由, 只测 /
+  status=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}/" 2>/dev/null || echo "000")
   if [ "$status" = "200" ]; then
-    pass "${path} → HTTP ${status}"
+    pass "/ → HTTP ${status}"
   else
-    fail "${path} → HTTP ${status}"
+    fail "/ → HTTP ${status}"
   fi
-done
+  echo "  (跳过 SPA 路由测试, 本地无 nginx)"
+fi
 
 # ====== 轮动数据测试 ======
 echo ""
@@ -133,6 +145,69 @@ echo ""
 echo "================================"
 echo "  通过: ${PASS}  失败: ${FAIL}"
 echo "================================"
+
+# ====== 本地 UI 测试 (仅本地模式) ======
+if [ -z "$SERVER" ]; then
+  echo ""
+  echo "--- 本地 UI 测试 ---"
+
+  # 用 node 检查 app.js 能否无错执行（模拟浏览器环境）
+  node -e "
+    // 模拟最小 DOM 环境
+    global.window = global;
+    global.document = { getElementById: () => ({ }) };
+    global.location = { pathname: '/', search: '', hostname: 'localhost' };
+    global.navigator = { userAgent: 'test' };
+    global.history = { replaceState: () => {} };
+    global.HTMLElement = class {};
+    global.localStorage = { getItem: () => null, setItem: () => {} };
+
+    // 模拟 React (只检查 app.js 的函数定义不报错)
+    global.React = {
+      createElement: () => null,
+      useState: (v) => [v, () => {}],
+      useEffect: () => {},
+      useRef: () => ({ current: null }),
+      useMemo: (fn) => fn(),
+      useCallback: (fn) => fn,
+      Fragment: 'Fragment',
+    };
+    global.ReactDOM = { createRoot: () => ({ render: () => {} }) };
+    global.Chart = function() { return { destroy: () => {} }; };
+
+    try {
+      require('./web/app.js');
+      console.log('OK');
+    } catch(e) {
+      console.log('FAIL: ' + e.message);
+      process.exit(1);
+    }
+  " 2>&1
+  result=$?
+  if [ $result -eq 0 ]; then
+    pass "app.js 模拟加载无错误"
+  else
+    fail "app.js 模拟加载失败"
+  fi
+
+  # 检查 data.js 语法
+  node -e "new Function(require('fs').readFileSync('web/data.js','utf8')); console.log('OK')" 2>&1
+  result=$?
+  if [ $result -eq 0 ]; then
+    pass "data.js 语法正确"
+  else
+    fail "data.js 语法错误"
+  fi
+
+  # 检查 rotation.js 语法
+  node -e "new Function(require('fs').readFileSync('web/rotation.js','utf8')); console.log('OK')" 2>&1
+  result=$?
+  if [ $result -eq 0 ]; then
+    pass "rotation.js 语法正确"
+  else
+    fail "rotation.js 语法错误"
+  fi
+fi
 
 if [ "$FAIL" -gt 0 ]; then
   exit 1
