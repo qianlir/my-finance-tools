@@ -2920,7 +2920,13 @@ Object.assign(window, {
   TweakButton
 });
 
+// --- app-bootstrap.js ---
 // === App + Router ===
+// 此文件包含路由解析、App 根组件、ReactDOM 启动代码
+// 不是 JSX，不需要编译，直接追加到 app.js 末尾
+// 依赖: PCNav, PCOverview, PCPremium, PCRotation (pc.jsx)
+//       MobOverview, MobPremium, MobRotation, MobTabs (mobile.jsx)
+
 function parseRoute() {
   var path = location.pathname;
   var params = new URLSearchParams(location.search);
