@@ -846,32 +846,15 @@ def _get_index_nav_date_close(nav_date: str, close_col: str) -> float:
 
 
 def _get_us_nav_date_close(nav_date: str, index_type: str) -> float:
-    """美股ETF: 查期货真收盘价（下一交易日的 prev_close）"""
+    """美股ETF: 查期货真收盘价 (回填的 nq_close)"""
+    close_col = INDEX_CONFIG[index_type]['close_col']
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    close_col = INDEX_CONFIG[index_type]['close_col']
-    prev_col = INDEX_CONFIG[index_type]['prev_col']
-
-    # 路径1: 后续交易日的 prev_close = nav_date 的真收盘价
-    try:
-        nav_dt = datetime.strptime(nav_date, '%Y-%m-%d')
-        next_dt = nav_dt + timedelta(days=1)
-        for _ in range(10):
-            while next_dt.weekday() >= 5:
-                next_dt += timedelta(days=1)
-            next_date = next_dt.strftime('%Y-%m-%d')
-            cursor.execute(f"SELECT {prev_col} FROM futures_data WHERE us_date = ? AND {prev_col} IS NOT NULL", (next_date,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                conn.close()
-                return float(row[0])
-            next_dt += timedelta(days=1)
-    except:
-        pass
-
-    # 路径2: 当天的 close（盘中价，精度较差）
-    cursor.execute(f"SELECT {close_col} FROM futures_data WHERE us_date = ?", (nav_date,))
+    cursor.execute(f"""
+        SELECT {close_col} FROM futures_data
+        WHERE date <= ? AND {close_col} IS NOT NULL
+        ORDER BY date DESC LIMIT 1
+    """, (nav_date,))
     row = cursor.fetchone()
     conn.close()
     return float(row[0]) if row and row[0] else 0
