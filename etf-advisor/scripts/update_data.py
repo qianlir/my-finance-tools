@@ -2589,9 +2589,11 @@ def update_realtime():
         es_prev_close = es.get('prev_close')
         ym_prev_close = ym.get('prev_close')
         nk_prev_close = nk.get('prev_close')
+        gc_realtime = gc.get('price')
         gc_close = None  # close 留给回填写入
         gc_prev_close = gc.get('prev_close')
         gc_change = gc.get('change_pct')
+        cl_realtime = cl.get('price')
         cl_close = None
         cl_prev_close = cl.get('prev_close')
         cl_change = cl.get('change_pct')
@@ -2652,9 +2654,9 @@ def update_realtime():
                 if dax_idx_change is not None:
                     print(f"  DAX指数: {dax_idx_close:.0f} ({dax_idx_change:+.2f}%)")
                 if gc_change is not None:
-                    print(f"  黄金GC: {gc_close:.1f} ({gc_change:+.2f}%)")
+                    print(f"  黄金GC: {gc_realtime or gc_prev_close:.1f} ({gc_change:+.2f}%)")
                 if cl_change is not None:
-                    print(f"  原油CL: {cl_close:.2f} ({cl_change:+.2f}%)")
+                    print(f"  原油CL: {cl_realtime or cl_prev_close:.2f} ({cl_change:+.2f}%)")
                 if cac_idx_change is not None:
                     print(f"  CAC40: {cac_idx_close:.0f} ({cac_idx_change:+.2f}%)")
                 if sensex_idx_change is not None:
