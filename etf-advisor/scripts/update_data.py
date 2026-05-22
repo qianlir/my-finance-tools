@@ -1901,12 +1901,12 @@ def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
         if cur_row:
             current_price = cur_row[close_col] or cur_row[prev_col]
 
-        # nav_date 对应的收盘价
+        # nav_date 对应的收盘价 (nav_date 是 A 股日期, NAV 反映前一晚美股收盘)
         nav_date_close = None
         if nav_date:
             nd_row = conn.execute(f"""
                 SELECT {close_col} FROM futures_data
-                WHERE date <= ? AND {close_col} IS NOT NULL
+                WHERE date < ? AND {close_col} IS NOT NULL
                 ORDER BY date DESC LIMIT 1
             """, (nav_date,)).fetchone()
             if nd_row:

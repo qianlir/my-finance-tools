@@ -846,13 +846,14 @@ def _get_index_nav_date_close(nav_date: str, close_col: str) -> float:
 
 
 def _get_us_nav_date_close(nav_date: str, index_type: str) -> float:
-    """美股ETF: 查期货真收盘价 (回填的 nq_close)"""
+    """美股ETF: 查净值对应的期货收盘价
+    nav_date 是 A 股日期, NAV 反映前一晚美股收盘, 所以用 date < nav_date"""
     close_col = INDEX_CONFIG[index_type]['close_col']
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(f"""
         SELECT {close_col} FROM futures_data
-        WHERE date <= ? AND {close_col} IS NOT NULL
+        WHERE date < ? AND {close_col} IS NOT NULL
         ORDER BY date DESC LIMIT 1
     """, (nav_date,))
     row = cursor.fetchone()
@@ -1137,7 +1138,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
     rep_nav_date = None
     for etf in etf_list:
         info = get_nav_info(etf['code'])
-        if info.get('nav_date'):
+        if info and info.get('nav_date'):
             rep_nav_date = info['nav_date']
             break
     
