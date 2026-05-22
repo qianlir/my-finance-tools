@@ -35,9 +35,43 @@ SYMBOL_TO_COL = {
 }
 
 
+def build_trading_days(conn):
+    """判断美股真实交易日, 两个条件同时满足:
+    1. 工作日 (周一~周五)
+    2. NQ/ES/YM 任一 close 相比前一天变化了
+    返回美股真实交易日的 set"""
+    from datetime import datetime
+    rows = conn.execute("""
+        SELECT date, nq_close, es_close, ym_close FROM futures_data
+        WHERE (nq_close IS NOT NULL OR es_close IS NOT NULL OR ym_close IS NOT NULL)
+        ORDER BY date
+    """).fetchall()
+    us_trading_days = set()
+    prev = {}
+    for r in rows:
+        # 条件1: 工作日
+        dt = datetime.strptime(r['date'], '%Y-%m-%d')
+        if dt.weekday() >= 5:
+            continue
+        # 条件2: 价格变化
+        changed = False
+        for col in ['nq_close', 'es_close', 'ym_close']:
+            val = r[col]
+            if val is not None and val != prev.get(col):
+                changed = True
+            if val is not None:
+                prev[col] = val
+        if changed:
+            us_trading_days.add(r['date'])
+    return us_trading_days
+
+
 def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+
+    # 用价格变化判断美股真实交易日
+    us_trading_days = build_trading_days(conn)
 
     fc_rows = conn.execute("""
         SELECT code, estimate_method, estimate_symbol
@@ -73,21 +107,24 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
         """, (code,)).fetchall():
             etf_map[r['date']] = r['nav']
 
-        # 期货/指数日期 → 收盘价
+        # 期货/指数收盘价 (只取真实交易日)
         idx_map = {}
         for r in conn.execute(f"""
             SELECT date, {close_col} as close_price FROM futures_data
             WHERE {close_col} IS NOT NULL AND {close_col} > 0
             ORDER BY date
         """).fetchall():
-            idx_map[r['date']] = r['close_price']
+            if r['date'] in us_trading_days:
+                idx_map[r['date']] = r['close_price']
 
         if not idx_map:
             continue
 
-        # 共同交易日 (A股有NAV 且 期货有收盘价)
-        common = sorted(d for d in etf_map if d in idx_map)
-        if len(common) < 2:
+        idx_dates_list = sorted(idx_map.keys())
+
+        # A股有NAV的日期 (不要求美股同日有收盘, 调休日也包含)
+        all_etf_dates = sorted(etf_map.keys())
+        if len(all_etf_dates) < 2:
             continue
 
         # 构建 nav_date 映射
@@ -97,10 +134,6 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
             WHERE code = ? AND nav_date IS NOT NULL
         """, (code,)).fetchall():
             nd_map[r['date']] = r['nav_date']
-
-        # 美股真实交易日索引 (用于找 nd 的前一个)
-        idx_dates_list = sorted(idx_map.keys())
-        idx_pos = {d: i for i, d in enumerate(idx_dates_list)}
 
         # 哪些天需要回填
         if force:
@@ -121,15 +154,13 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
         prev_nav = None
         prev_date = None
 
-        for i in range(len(common)):
-            T = common[i]
-
+        for T in all_etf_dates:
             if T not in need_fill:
                 prev_nav = etf_map[T]
                 prev_date = T
                 continue
 
-            # 跳过 NAV 没变的天
+            # NAV 没变 → 直接复制
             if prev_nav and etf_map[T] == prev_nav:
                 if not dry_run:
                     conn.execute("""
@@ -141,15 +172,20 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
 
             est = None
 
-            # 方法1: 精确公式 (有 nav_date 时)
-            nd_T = nd_map.get(T)
-            nd_prev = nd_map.get(prev_date) if prev_date else None
-            if nd_T and nd_prev and nd_T in idx_map and nd_prev in idx_map:
-                est = prev_nav * idx_map[nd_T] / idx_map[nd_prev]
+            # 取 T 和 prev_date 对应的美股收盘价
+            # 优先直接匹配, A股调休日 fallback 到前一个美股交易日
+            import bisect
+            def _get_close(d):
+                if d in idx_map:
+                    return idx_map[d]
+                pos = bisect.bisect_right(idx_dates_list, d) - 1
+                return idx_map[idx_dates_list[pos]] if pos >= 0 else None
 
-            # 方法2: fallback 共同交易日公式
-            if est is None and prev_nav and T in idx_map and prev_date and prev_date in idx_map:
-                est = prev_nav * idx_map[T] / idx_map[prev_date]
+            c_T = _get_close(T)
+            c_prev = _get_close(prev_date) if prev_date else None
+
+            if prev_nav and c_T and c_prev:
+                est = prev_nav * c_T / c_prev
 
             if est and abs(est / etf_map[T] - 1) < 0.5:
                 if not dry_run:
@@ -169,7 +205,7 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
 
         if updated > 0 or skipped > 0:
             print(f"  {code} ({symbol}): 回填 {updated}, 跳过 {skipped} "
-                  f"(共同交易日 {len(common)})")
+                  f"(A股交易日 {len(all_etf_dates)})")
 
     if not dry_run:
         conn.commit()
