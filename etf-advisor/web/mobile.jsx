@@ -178,6 +178,7 @@ function MobPremium({ activeIdx, setActiveIdx }) {
             ))}
           </div>
         )}
+        <NavHistory history={selFund.nav_history} />
       </div>
     );
   }

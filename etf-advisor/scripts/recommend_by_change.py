@@ -353,6 +353,29 @@ def get_previous_data() -> Tuple[Dict[str, float], str]:  # 返回 (价格字典
     return previous, prev_date
 
 
+def _get_nav_history(code: str, days: int = 30) -> list:
+    """获取最近N天的净值 vs 估算净值历史, 供详情页展示"""
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT date, nav, estimated_nav FROM etf_data
+        WHERE code = ? AND nav IS NOT NULL
+        ORDER BY date DESC LIMIT ?
+    """, (code, days)).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        nav, est = r['nav'], r['estimated_nav']
+        err = round((est / nav - 1) * 100, 2) if est and nav and nav > 0 else None
+        result.append({
+            "date": r['date'],
+            "nav": round(nav, 4),
+            "est": round(est, 4) if est else None,
+            "err": err,
+        })
+    result.reverse()  # 按日期升序
+    return result
+
+
 def _get_holdings_with_prices(fund_code: str) -> list:
     """获取基金持仓及对应的股票价格"""
     conn = get_db_connection()
@@ -1384,7 +1407,8 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "holdings": _get_holdings_with_prices(r['code']) if index_type in ('OTHERS', 'LOF') else None,
                 "arbitrage": r.get('arbitrage'),
                 "subscription_status": r.get('subscription_status'),
-                "subscription_limit": r.get('subscription_limit')
+                "subscription_limit": r.get('subscription_limit'),
+                "nav_history": _get_nav_history(r['code']),
             })
 
         # 净值日期（取第一个ETF的nav_date）

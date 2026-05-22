@@ -236,6 +236,7 @@ function PCPremium({ activeIdx, setActiveIdx }) {
             </div>
           )}
         </div>
+        <NavHistory history={selFund.nav_history} />
       </div>
     );
   }

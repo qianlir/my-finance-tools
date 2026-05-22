@@ -287,6 +287,59 @@ function ArbitrageBadge({ arb, limit }) {
 }
 
 window.ArbitrageBadge = ArbitrageBadge;
+// NAV history table with weekly pagination
+function NavHistory({ history }) {
+  if (!history || history.length === 0) return null;
+  const [weekOff, setWeekOff] = React.useState(0);
+  // 按自然周分页 (周一~周日)
+  const weeks = React.useMemo(() => {
+    const m = {};
+    history.forEach(r => {
+      const d = new Date(r.date);
+      const mon = new Date(d); mon.setDate(d.getDate() - (d.getDay() || 7) + 1);
+      const key = mon.toISOString().slice(0, 10);
+      (m[key] = m[key] || []).push(r);
+    });
+    return Object.keys(m).sort().reverse().map(k => m[k]);
+  }, [history]);
+  const page = weeks[weekOff] || [];
+  const hasNext = weekOff + 1 < weeks.length && (weeks[weekOff + 1] || []).length > 0;
+  const hasPrev = weekOff > 0;
+  const totalWeeks = weeks.length;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Label>净值 vs 估算净值</Label>
+        <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--font-ui)', fontSize: 11 }}>
+          {hasNext && <span onClick={() => setWeekOff(weekOff + 1)} style={{ color: 'var(--fg-3)', cursor: 'pointer' }}>← 更早</span>}
+          <span style={{ color: 'var(--fg-muted)' }}>{weekOff + 1}/{totalWeeks}</span>
+          {hasPrev && <span onClick={() => setWeekOff(weekOff - 1)} style={{ color: 'var(--fg-3)', cursor: 'pointer' }}>更近 →</span>}
+        </div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--ink-20)' }}>
+            <th style={{ textAlign: 'left', padding: '4px 0', fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>日期</th>
+            <th style={{ textAlign: 'right', padding: '4px 0', fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>净值</th>
+            <th style={{ textAlign: 'right', padding: '4px 0', fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>估算</th>
+            <th style={{ textAlign: 'right', padding: '4px 0', fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>误差</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.map(r => (
+            <tr key={r.date} style={{ borderBottom: '1px solid var(--ink-10)' }}>
+              <td style={{ padding: '5px 0', color: 'var(--fg-2)' }}>{r.date.slice(5)}</td>
+              <td style={{ textAlign: 'right', padding: '5px 0' }}>{r.nav.toFixed(4)}</td>
+              <td style={{ textAlign: 'right', padding: '5px 0', color: r.est ? 'var(--ink)' : 'var(--fg-muted)' }}>{r.est ? r.est.toFixed(4) : '—'}</td>
+              <td style={{ textAlign: 'right', padding: '5px 0', color: r.err != null ? chg(r.err) : 'var(--fg-muted)' }}>{r.err != null ? (r.err > 0 ? '+' : '') + r.err.toFixed(2) + '%' : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;
@@ -298,4 +351,5 @@ window.FuturesTicker = FuturesTicker;
 window.RefreshBtn = RefreshBtn;
 window.PoolBadge = PoolBadge;
 window.FundDetailModal = FundDetailModal;
+window.NavHistory = NavHistory;
 window.TH = TH; window.TD = TD; window.TDL = TDL; window.TDM = TDM;

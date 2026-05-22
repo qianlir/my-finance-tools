@@ -649,6 +649,138 @@ function ArbitrageBadge({
   }, text);
 }
 window.ArbitrageBadge = ArbitrageBadge;
+// NAV history table with weekly pagination
+function NavHistory({
+  history
+}) {
+  if (!history || history.length === 0) return null;
+  const [weekOff, setWeekOff] = React.useState(0);
+  // 按自然周分页 (周一~周日)
+  const weeks = React.useMemo(() => {
+    const m = {};
+    history.forEach(r => {
+      const d = new Date(r.date);
+      const mon = new Date(d);
+      mon.setDate(d.getDate() - (d.getDay() || 7) + 1);
+      const key = mon.toISOString().slice(0, 10);
+      (m[key] = m[key] || []).push(r);
+    });
+    return Object.keys(m).sort().reverse().map(k => m[k]);
+  }, [history]);
+  const page = weeks[weekOff] || [];
+  const hasNext = weekOff + 1 < weeks.length && (weeks[weekOff + 1] || []).length > 0;
+  const hasPrev = weekOff > 0;
+  const totalWeeks = weeks.length;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(Label, null, "\u51C0\u503C vs \u4F30\u7B97\u51C0\u503C"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 12,
+      fontFamily: 'var(--font-ui)',
+      fontSize: 11
+    }
+  }, hasNext && /*#__PURE__*/React.createElement("span", {
+    onClick: () => setWeekOff(weekOff + 1),
+    style: {
+      color: 'var(--fg-3)',
+      cursor: 'pointer'
+    }
+  }, "\u2190 \u66F4\u65E9"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--fg-muted)'
+    }
+  }, weekOff + 1, "/", totalWeeks), hasPrev && /*#__PURE__*/React.createElement("span", {
+    onClick: () => setWeekOff(weekOff - 1),
+    style: {
+      color: 'var(--fg-3)',
+      cursor: 'pointer'
+    }
+  }, "\u66F4\u8FD1 \u2192"))), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      borderBottom: '1px solid var(--ink-20)'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '4px 0',
+      fontFamily: 'var(--font-ui)',
+      fontSize: 10,
+      color: 'var(--fg-3)',
+      fontWeight: 500
+    }
+  }, "\u65E5\u671F"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'right',
+      padding: '4px 0',
+      fontFamily: 'var(--font-ui)',
+      fontSize: 10,
+      color: 'var(--fg-3)',
+      fontWeight: 500
+    }
+  }, "\u51C0\u503C"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'right',
+      padding: '4px 0',
+      fontFamily: 'var(--font-ui)',
+      fontSize: 10,
+      color: 'var(--fg-3)',
+      fontWeight: 500
+    }
+  }, "\u4F30\u7B97"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'right',
+      padding: '4px 0',
+      fontFamily: 'var(--font-ui)',
+      fontSize: 10,
+      color: 'var(--fg-3)',
+      fontWeight: 500
+    }
+  }, "\u8BEF\u5DEE"))), /*#__PURE__*/React.createElement("tbody", null, page.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.date,
+    style: {
+      borderBottom: '1px solid var(--ink-10)'
+    }
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: '5px 0',
+      color: 'var(--fg-2)'
+    }
+  }, r.date.slice(5)), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: 'right',
+      padding: '5px 0'
+    }
+  }, r.nav.toFixed(4)), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: 'right',
+      padding: '5px 0',
+      color: r.est ? 'var(--ink)' : 'var(--fg-muted)'
+    }
+  }, r.est ? r.est.toFixed(4) : '—'), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: 'right',
+      padding: '5px 0',
+      color: r.err != null ? chg(r.err) : 'var(--fg-muted)'
+    }
+  }, r.err != null ? (r.err > 0 ? '+' : '') + r.err.toFixed(2) + '%' : '—'))))));
+}
 window.fmtPct = fmtPct;
 window.chg = chg;
 window.Stars = Stars;
@@ -660,6 +792,7 @@ window.FuturesTicker = FuturesTicker;
 window.RefreshBtn = RefreshBtn;
 window.PoolBadge = PoolBadge;
 window.FundDetailModal = FundDetailModal;
+window.NavHistory = NavHistory;
 window.TH = TH;
 window.TD = TD;
 window.TDL = TDL;
@@ -1245,7 +1378,9 @@ function PCPremium({
         fontSize: 12,
         color: chg(h.change_pct)
       }
-    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))))));
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))))), /*#__PURE__*/React.createElement(NavHistory, {
+      history: selFund.nav_history
+    }));
   }
   const etfs = section.etfs;
   const fc = section.futures_correction;
@@ -1980,7 +2115,9 @@ function MobPremium({
         fontSize: 10,
         color: chg(h.change_pct)
       }
-    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))));
+    }, h.change_pct != null ? fmtPct(h.change_pct) : '—'))))), /*#__PURE__*/React.createElement(NavHistory, {
+      history: selFund.nav_history
+    }));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
