@@ -1892,14 +1892,19 @@ def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # 当前价: 优先今天的 prev_close (实时API的上次收盘), 再 fallback 到最新 close
+        # 当前价: close (真收盘), 或 prev × (1+change%) (实时价)
+        change_col = close_col.replace('_close', '_change_pct')
         cur_row = conn.execute(f"""
-            SELECT {close_col}, {prev_col} FROM futures_data
+            SELECT {close_col}, {prev_col}, {change_col} FROM futures_data
             ORDER BY date DESC LIMIT 1
         """).fetchone()
         current_price = None
         if cur_row:
-            current_price = cur_row[close_col] or cur_row[prev_col]
+            if cur_row[close_col]:
+                current_price = cur_row[close_col]
+            elif cur_row[prev_col]:
+                chg = cur_row[change_col] or 0
+                current_price = cur_row[prev_col] * (1 + chg / 100)
 
         # nav_date 对应的收盘价 (nav_date 是 A 股日期, NAV 反映前一晚美股收盘)
         nav_date_close = None

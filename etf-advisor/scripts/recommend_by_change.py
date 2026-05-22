@@ -600,21 +600,19 @@ def get_futures_info() -> List[Dict]:
     for i, row in enumerate(rows):
         entry = {'date': row['us_date']}
 
-        # 优先 close (真收盘价), fallback prev_close (当天 close 未回填时)
-        nq_p = row['nq_close'] or row['nq_prev_close']
-        if nq_p is not None:
-            entry['nq_price'] = nq_p
-            entry['nq_change'] = row['nq_change_pct']
-
-        es_p = row['es_close'] or row['es_prev_close']
-        if es_p is not None:
-            entry['es_price'] = es_p
-            entry['es_change'] = row['es_change_pct']
-
-        ym_p = row['ym_close'] or row['ym_prev_close']
-        if ym_p is not None:
-            entry['ym_price'] = ym_p
-            entry['ym_change'] = row['ym_change_pct']
+        # 优先 close (真收盘价), 其次 prev × (1+change%) = 实时价
+        for sym, close_k, prev_k, chg_k in [
+            ('nq', 'nq_close', 'nq_prev_close', 'nq_change_pct'),
+            ('es', 'es_close', 'es_prev_close', 'es_change_pct'),
+            ('ym', 'ym_close', 'ym_prev_close', 'ym_change_pct'),
+        ]:
+            p = row[close_k]
+            chg = row[chg_k]
+            if not p and row[prev_k] and chg is not None:
+                p = row[prev_k] * (1 + chg / 100)
+            if p is not None:
+                entry[f'{sym}_price'] = round(p, 2)
+                entry[f'{sym}_change'] = chg
 
         try:
             if row['nk_close'] is not None:
@@ -881,9 +879,10 @@ def get_current_futures_price(index_type: str) -> float:
     cursor = conn.cursor()
     cfg_for_prev = INDEX_CONFIG.get(index_type, {})
     prev_col = cfg_for_prev.get('prev_col', close_col.replace('_close', '_prev_close'))
-    # 优先用 close (真收盘价), fallback 到 prev_close (上次收盘价, 当天 close 未回填时)
+    change_col = cfg_for_prev.get('change_col', close_col.replace('_close', '_change_pct'))
+    # 优先用 close (真收盘价), 其次用 prev × (1+change%) 算实时价
     cursor.execute(f"""
-        SELECT {close_col}, {prev_col} FROM futures_data
+        SELECT {close_col}, {prev_col}, {change_col} FROM futures_data
         WHERE ({close_col} IS NOT NULL OR {prev_col} IS NOT NULL)
         ORDER BY date DESC LIMIT 1
     """)
@@ -891,7 +890,12 @@ def get_current_futures_price(index_type: str) -> float:
     conn.close()
 
     if row:
-        return float(row[0] or row[1] or 0)
+        if row[0]:
+            return float(row[0])
+        # close 未回填时: prev × (1 + change_pct/100) = 实时价
+        prev = float(row[1] or 0)
+        chg = float(row[2] or 0)
+        return prev * (1 + chg / 100) if prev else 0
     return 0
 
 # ============= 计算函数 =============
