@@ -601,17 +601,17 @@ def get_futures_info() -> List[Dict]:
         entry = {'date': row['us_date']}
 
         # 优先 close (真收盘价), fallback prev_close (当天 close 未回填时)
-        nq_p = row['nq_close'] or row.get('nq_prev_close')
+        nq_p = row['nq_close'] or row['nq_prev_close']
         if nq_p is not None:
             entry['nq_price'] = nq_p
             entry['nq_change'] = row['nq_change_pct']
 
-        es_p = row['es_close'] or row.get('es_prev_close')
+        es_p = row['es_close'] or row['es_prev_close']
         if es_p is not None:
             entry['es_price'] = es_p
             entry['es_change'] = row['es_change_pct']
 
-        ym_p = row['ym_close'] or row.get('ym_prev_close')
+        ym_p = row['ym_close'] or row['ym_prev_close']
         if ym_p is not None:
             entry['ym_price'] = ym_p
             entry['ym_change'] = row['ym_change_pct']
