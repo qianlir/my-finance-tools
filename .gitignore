@@ -26,3 +26,7 @@ etf-miniprogram/project.private.config.json
 *.zip
 etf-advisor/web/vendor/babel.min.js
 etf-advisor/web/data
+node_modules/
+*.sqlite3
+*.db.pre-*
+etf-advisor/data/tuning/

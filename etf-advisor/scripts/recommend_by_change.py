@@ -600,16 +600,20 @@ def get_futures_info() -> List[Dict]:
     for i, row in enumerate(rows):
         entry = {'date': row['us_date']}
 
-        if row['nq_close'] is not None:
-            entry['nq_price'] = row['nq_close']
+        # 优先 close (真收盘价), fallback prev_close (当天 close 未回填时)
+        nq_p = row['nq_close'] or row.get('nq_prev_close')
+        if nq_p is not None:
+            entry['nq_price'] = nq_p
             entry['nq_change'] = row['nq_change_pct']
 
-        if row['es_close'] is not None:
-            entry['es_price'] = row['es_close']
+        es_p = row['es_close'] or row.get('es_prev_close')
+        if es_p is not None:
+            entry['es_price'] = es_p
             entry['es_change'] = row['es_change_pct']
 
-        if row['ym_close'] is not None:
-            entry['ym_price'] = row['ym_close']
+        ym_p = row['ym_close'] or row.get('ym_prev_close')
+        if ym_p is not None:
+            entry['ym_price'] = ym_p
             entry['ym_change'] = row['ym_change_pct']
 
         try:
@@ -891,12 +895,19 @@ def get_current_futures_price(index_type: str) -> float:
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(f"SELECT {close_col} FROM futures_data WHERE {close_col} IS NOT NULL ORDER BY date DESC LIMIT 1")
+    cfg_for_prev = INDEX_CONFIG.get(index_type, {})
+    prev_col = cfg_for_prev.get('prev_col', close_col.replace('_close', '_prev_close'))
+    # 优先用 close (真收盘价), fallback 到 prev_close (上次收盘价, 当天 close 未回填时)
+    cursor.execute(f"""
+        SELECT {close_col}, {prev_col} FROM futures_data
+        WHERE ({close_col} IS NOT NULL OR {prev_col} IS NOT NULL)
+        ORDER BY date DESC LIMIT 1
+    """)
     row = cursor.fetchone()
     conn.close()
 
-    if row and row[0]:
-        return float(row[0])
+    if row:
+        return float(row[0] or row[1] or 0)
     return 0
 
 # ============= 计算函数 =============

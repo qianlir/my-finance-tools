@@ -1238,14 +1238,14 @@ def backfill_sox_index_history(days=30):
         conn.close()
         return 0
 
-    # 获取最新 NQ 作为锚点比率
-    cursor.execute("SELECT nq_close FROM futures_data WHERE nq_close IS NOT NULL ORDER BY date DESC LIMIT 1")
+    # 获取最新 NQ 作为锚点比率 (优先 close, fallback prev_close)
+    cursor.execute("SELECT nq_close, nq_prev_close FROM futures_data WHERE (nq_close IS NOT NULL OR nq_prev_close IS NOT NULL) ORDER BY date DESC LIMIT 1")
     nq_latest = cursor.fetchone()
     if not nq_latest:
         conn.close()
         return 0
 
-    nq_latest_close = nq_latest[0]
+    nq_latest_close = nq_latest[0] or nq_latest[1]
     sox_nq_ratio = sox_price_today / nq_latest_close
 
     updated = 0
@@ -1329,29 +1329,35 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                       sox_idx_close=None, sox_idx_prev_close=None, sox_idx_change=None,
                       vix_close=None, vix_prev_close=None, vix_change_pct=None,
                       vxn_close=None, vxn_prev_close=None, vxn_change_pct=None):
-    """保存期货数据到数据库（NQ/ES/YM/NK/GC/CL期货用 INSERT OR REPLACE）"""
+    """保存期货数据到数据库.
+    用 INSERT OR IGNORE + UPDATE 模式: 不碰 _close 列 (由 backfill_futures_history 写入真收盘价).
+    """
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # 美股 + NK/GC/CL期货：INSERT OR REPLACE
+        # 确保当天有行 (不覆盖已有数据)
+        cursor.execute("INSERT OR IGNORE INTO futures_data (date) VALUES (?)", (date,))
+
+        # 只更新 prev_close + change_pct + source + us_date, 不碰 _close 列
         cursor.execute("""
-            INSERT OR REPLACE INTO futures_data
-            (date, us_date, nq_close, nq_prev_close, nq_change_pct,
-             es_close, es_prev_close, es_change_pct,
-             ym_close, ym_prev_close, ym_change_pct,
-             nk_close, nk_prev_close, nk_change_pct,
-             gc_close, gc_prev_close, gc_change_pct,
-             cl_close, cl_prev_close, cl_change_pct,
-             nq_source, es_source, ym_source, nk_source, gc_source, cl_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (date, us_date, nq_close, nq_prev_close, nq_change,
-              es_close, es_prev_close, es_change,
-              ym_close, ym_prev_close, ym_change,
-              nk_close, nk_prev_close, nk_change,
-              gc_close, gc_prev_close, gc_change,
-              cl_close, cl_prev_close, cl_change,
-              nq_source, es_source, ym_source, nk_source, gc_source, cl_source))
+            UPDATE futures_data SET
+                us_date = COALESCE(?, us_date),
+                nq_prev_close = COALESCE(?, nq_prev_close), nq_change_pct = COALESCE(?, nq_change_pct), nq_source = COALESCE(?, nq_source),
+                es_prev_close = COALESCE(?, es_prev_close), es_change_pct = COALESCE(?, es_change_pct), es_source = COALESCE(?, es_source),
+                ym_prev_close = COALESCE(?, ym_prev_close), ym_change_pct = COALESCE(?, ym_change_pct), ym_source = COALESCE(?, ym_source),
+                nk_prev_close = COALESCE(?, nk_prev_close), nk_change_pct = COALESCE(?, nk_change_pct), nk_source = COALESCE(?, nk_source),
+                gc_prev_close = COALESCE(?, gc_prev_close), gc_change_pct = COALESCE(?, gc_change_pct), gc_source = COALESCE(?, gc_source),
+                cl_prev_close = COALESCE(?, cl_prev_close), cl_change_pct = COALESCE(?, cl_change_pct), cl_source = COALESCE(?, cl_source)
+            WHERE date = ?
+        """, (us_date,
+              nq_prev_close, nq_change, nq_source,
+              es_prev_close, es_change, es_source,
+              ym_prev_close, ym_change, ym_source,
+              nk_prev_close, nk_change, nk_source,
+              gc_prev_close, gc_change, gc_source,
+              cl_prev_close, cl_change, cl_source,
+              date))
 
         # 日经指数 + DAX指数 + CAC指数 + SENSEX指数：单独 UPDATE + COALESCE
         if nk_idx_close is not None:
@@ -1849,6 +1855,136 @@ def estimate_nav_by_holdings(fund_code, confirmed_nav):
     return est_nav, est_change
 
 
+def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
+    """统一的估算净值计算入口 (4 种方法).
+
+    Args:
+        code: ETF 代码
+        nav: 确认净值
+        nav_date: 净值对应日期 (美股收盘日)
+        estimate_method: 'futures', 'index', 'holdings', 'fundgz'
+        estimate_symbol: 'NQ', 'ES', 'YM', 'GC', 'CL', 'N225', 'GDAXI', ...
+
+    Returns: estimated_nav (float), 失败返回 nav
+    """
+    if not nav or nav <= 0:
+        return nav
+
+    if estimate_method in ('futures', 'index'):
+        # 期货/指数比值法: nav × (current / nav_date_close)
+        symbol_to_cols = {
+            'NQ': ('nq_close', 'nq_prev_close'),
+            'ES': ('es_close', 'es_prev_close'),
+            'YM': ('ym_close', 'ym_prev_close'),
+            'GC': ('gc_close', 'gc_prev_close'),
+            'CL': ('cl_close', 'cl_prev_close'),
+            'N225': ('nk_idx_close', 'nk_idx_prev_close'),
+            'GDAXI': ('dax_idx_close', 'dax_idx_prev_close'),
+            'CAC': ('cac_idx_close', 'cac_idx_prev_close'),
+            'SENSEX': ('sensex_idx_close', 'sensex_idx_prev_close'),
+            'SOX': ('sox_idx_close', 'sox_idx_prev_close'),
+        }
+        cols = symbol_to_cols.get(estimate_symbol)
+        if not cols:
+            return nav
+
+        close_col, prev_col = cols
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        # 当前价 (最新 futures_data 的 close)
+        cur_row = conn.execute(f"""
+            SELECT {close_col} FROM futures_data
+            WHERE {close_col} IS NOT NULL ORDER BY date DESC LIMIT 1
+        """).fetchone()
+        current_price = cur_row[close_col] if cur_row else None
+
+        # nav_date 对应的收盘价
+        nav_date_close = None
+        if nav_date:
+            nd_row = conn.execute(f"""
+                SELECT {close_col} FROM futures_data
+                WHERE date <= ? AND {close_col} IS NOT NULL
+                ORDER BY date DESC LIMIT 1
+            """, (nav_date,)).fetchone()
+            if nd_row:
+                nav_date_close = nd_row[close_col]
+
+        # fallback: 用 prev_close
+        if not nav_date_close and current_price:
+            pc_row = conn.execute(f"""
+                SELECT {prev_col} FROM futures_data
+                WHERE {prev_col} IS NOT NULL ORDER BY date DESC LIMIT 1
+            """).fetchone()
+            if pc_row:
+                nav_date_close = pc_row[prev_col]
+
+        conn.close()
+
+        if current_price and nav_date_close and nav_date_close > 0:
+            return nav * (current_price / nav_date_close)
+        return nav
+
+    elif estimate_method == 'holdings':
+        est_nav, _ = estimate_nav_by_holdings(code, nav)
+        return est_nav
+
+    elif estimate_method == 'fundgz':
+        gz = get_fundgz_nav(code)
+        if gz and gz.get('estimated_nav') and gz['estimated_nav'] > 0:
+            return gz['estimated_nav']
+        return nav
+
+    return nav
+
+
+def compute_and_save_estimated_nav(date):
+    """计算当日所有 ETF 的估算净值并写入 etf_data.estimated_nav.
+
+    在 update_realtime() 末尾调用 (期货 + 持仓价格已保存后).
+    用 UPDATE 只改 estimated_nav 列, 不影响其他字段.
+
+    Returns: 更新记录数
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    # 查当日有 nav 的 ETF
+    etf_rows = conn.execute("""
+        SELECT code, nav, nav_date FROM etf_data
+        WHERE date = ? AND nav IS NOT NULL AND nav > 0
+    """, (date,)).fetchall()
+
+    # 查 fund_config
+    fc_rows = conn.execute("""
+        SELECT code, estimate_method, estimate_symbol FROM fund_config WHERE enabled = 1
+    """).fetchall()
+    fc_map = {r['code']: r for r in fc_rows}
+
+    updated = 0
+    for row in etf_rows:
+        code = row['code']
+        fc = fc_map.get(code)
+        if not fc:
+            continue
+
+        est_nav = estimate_nav_for_etf(
+            code, row['nav'], row['nav_date'],
+            fc['estimate_method'], fc['estimate_symbol']
+        )
+
+        if est_nav and est_nav > 0 and abs(est_nav - row['nav']) / row['nav'] < 0.5:
+            # 合理性检查: 估算值偏离确认值 < 50%
+            conn.execute("""
+                UPDATE etf_data SET estimated_nav = ? WHERE date = ? AND code = ?
+            """, (round(est_nav, 4), date, code))
+            updated += 1
+
+    conn.commit()
+    conn.close()
+    return updated
+
+
 def update_subscription_status():
     """查询所有LOF的申购/赎回状态（每天12点后查一次）"""
     now = datetime.now()
@@ -1959,6 +2095,10 @@ def init_database():
         pass  # 字段已存在
     try:
         cursor.execute("ALTER TABLE etf_data ADD COLUMN change_pct REAL")
+    except Exception:
+        pass  # 字段已存在
+    try:
+        cursor.execute("ALTER TABLE etf_data ADD COLUMN estimated_nav REAL")
     except Exception:
         pass  # 字段已存在
 
@@ -2102,13 +2242,14 @@ def save_etf_records(records):
         try:
             cursor.execute("""
                 INSERT OR REPLACE INTO etf_data
-                (date, timestamp, code, name, company, price, prev_close, nav, premium_rate, change_pct, nav_type, nav_date, is_fixed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (date, timestamp, code, name, company, price, prev_close, nav, premium_rate, change_pct, nav_type, nav_date, is_fixed, estimated_nav)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (r['date'], f"{r['date']}T15:00:00", r['code'], r['name'],
                   r['company'], r['price'], r.get('prev_close'), r.get('nav'), r.get('premium_rate'),
                   r.get('change_pct'), r.get('nav_type', 'actual'),
                   r.get('nav_date'),  # 净值实际日期
-                  r.get('is_fixed', 0)))  # 是否为fixed数据
+                  r.get('is_fixed', 0),  # 是否为fixed数据
+                  r.get('estimated_nav')))
             saved += 1
         except Exception as e:
             print(f"保存记录失败 {r.get('code')}: {e}")
@@ -2434,18 +2575,24 @@ def update_realtime():
         es_change = es.get('change_pct')
         ym_change = ym.get('change_pct')
         nk_change = nk.get('change_pct')
-        nq_close = nq.get('price')
-        es_close = es.get('price')
-        ym_close = ym.get('price')
-        nk_close = nk.get('price')
+        # 实时价仅用于内存/report显示, 不写入 DB 的 _close 列
+        # _close 列只由 backfill_futures_history() 写入真正的收盘价
+        nq_realtime = nq.get('price')
+        es_realtime = es.get('price')
+        ym_realtime = ym.get('price')
+        nk_realtime = nk.get('price')
+        nq_close = None  # close 留给回填写入
+        es_close = None
+        ym_close = None
+        nk_close = None
         nq_prev_close = nq.get('prev_close')
         es_prev_close = es.get('prev_close')
         ym_prev_close = ym.get('prev_close')
         nk_prev_close = nk.get('prev_close')
-        gc_close = gc.get('price')
+        gc_close = None  # close 留给回填写入
         gc_prev_close = gc.get('prev_close')
         gc_change = gc.get('change_pct')
-        cl_close = cl.get('price')
+        cl_close = None
         cl_prev_close = cl.get('prev_close')
         cl_change = cl.get('change_pct')
         nk_idx = futures.get('NK_IDX', {})
@@ -2554,6 +2701,11 @@ def update_realtime():
         # 更新LOF申购状态
         print("\n更新LOF申购状态...")
         update_subscription_status()
+
+    # 计算并保存估算净值 (在期货+持仓价格都已更新后)
+    print("\n计算估算净值...")
+    est_count = compute_and_save_estimated_nav(today)
+    print(f"估算净值: 更新 {est_count} 条")
 
     # 写入快照文件
     write_snapshot(records)

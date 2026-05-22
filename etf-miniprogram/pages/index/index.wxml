@@ -1,85 +1,127 @@
-<!--pages/index/index.wxml-->
 <wxs src="../../utils/format.wxs" module="fmt" />
 
-<view class="container">
-  <!-- 头部 -->
-  <view class="header">
-    <text class="title">ETF 投资助手</text>
-    <text class="subtitle" bindtap="onRefresh">最后更新: {{lastUpdate}} 🔄</text>
-  </view>
+<view class="loading" wx:if="{{loading}}">
+  <text>加载中...</text>
+</view>
 
-  <!-- 实时溢价卡片 -->
-  <view class="card report-card" bindtap="goToReport">
-    <view class="card-header">
-      <text class="icon">📊</text>
-      <text class="card-title">实时溢价分析</text>
-      <text class="arrow">→</text>
-    </view>
-    <view class="card-body">
-      <view class="futures-row">
-        <text class="label">纳指期货</text>
-        <text class="value {{nqChange >= 0 ? 'red' : 'green'}}">{{nqPrice}} ({{fmt.formatPercent(nqChange)}})</text>
-      </view>
-      <view class="futures-row">
-        <text class="label">标普期货</text>
-        <text class="value {{esChange >= 0 ? 'red' : 'green'}}">{{esPrice}} ({{fmt.formatPercent(esChange)}})</text>
-      </view>
-    </view>
-    <view class="card-footer">
-      <text class="hint">查看各 ETF 溢价率与推荐</text>
+<view class="error" wx:if="{{error && !loading}}">
+  <text>{{error}}</text>
+</view>
+
+<view class="page" wx:if="{{report && !loading}}">
+
+  <!-- 顶部状态栏 -->
+  <view class="status-bar">
+    <text class="freshness">{{report.data_freshness}}</text>
+    <view class="status-right">
+      <text class="time">{{lastUpdated}}</text>
+      <text class="version" bindtap="onTapVersion">v1.0</text>
     </view>
   </view>
 
-  <!-- 回测分析卡片 -->
-  <view class="card backtest-card" bindtap="goToBacktest">
-    <view class="card-header">
-      <text class="icon">📈</text>
-      <text class="card-title">策略回测</text>
-      <text class="arrow">→</text>
-    </view>
-    <view class="card-body">
-      <view class="strategy-row">
-        <text class="label">策略A (每日换仓)</text>
-        <text class="value {{strategyAReturn >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(strategyAReturn)}}</text>
-      </view>
-      <view class="strategy-row">
-        <text class="label">策略B (阈值>0.5)</text>
-        <text class="value {{strategyBReturn >= 0 ? 'red' : 'green'}}">{{fmt.formatPercent(strategyBReturn)}}</text>
-      </view>
-      <view class="drawdown-row">
-        <text class="label">最大回撤</text>
-        <text class="value green">{{fmt.formatPercent(maxDrawdown)}}</text>
-      </view>
-    </view>
-    <view class="card-footer">
-      <text class="hint">查看历史回测结果与收益对比</text>
+  <!-- 期货行情 -->
+  <view class="futures">
+    <view class="futures-row" wx:for="{{report.futures}}" wx:key="date">
+      <text class="futures-date">{{item.date}}</text>
+      <text class="mono {{fmt.colorClass(item.nq_change)}}">NQ {{fmt.formatInt(item.nq_price)}} ({{fmt.formatPercent(item.nq_change)}})</text>
+      <text class="dot"> · </text>
+      <text class="mono {{fmt.colorClass(item.es_change)}}">ES {{fmt.formatInt(item.es_price)}} ({{fmt.formatPercent(item.es_change)}})</text>
     </view>
   </view>
 
-  <!-- 持仓换仓卡片 -->
-  <view class="card holdings-card" bindtap="goToHoldings">
-    <view class="card-header">
-      <text class="icon">💼</text>
-      <text class="card-title">持仓换仓</text>
-      <text class="arrow">→</text>
+  <!-- 指数 Tab 切换 -->
+  <scroll-view scroll-x="true" class="idx-tabs" enhanced="true" show-scrollbar="false">
+    <view class="idx-tabs-inner">
+      <text wx:for="{{report.sections}}" wx:key="index_type"
+        class="idx-tab {{activeIdx === item.index_type ? 'active' : ''}}"
+        data-idx="{{item.index_type}}"
+        bindtap="onTabChange">{{item.index_name}}</text>
     </view>
-    <view class="card-body">
-      <view wx:if="{{hasHoldings}}" class="holdings-status">
-        <text class="status-ok">已获取持仓</text>
-        <text class="count">共 {{holdingsCount}} 只基金</text>
+  </scroll-view>
+
+  <!-- 期货修正公式 -->
+  <view wx:if="{{activeSection.futures_correction}}" class="correction-hint">
+    <text>净值 {{fmt.shortDate(activeSection.nav_date)}} · {{activeSection.futures_correction.symbol}} {{fmt.formatInt(activeSection.futures_correction.current_futures_price)}} / {{fmt.formatInt(activeSection.futures_correction.nav_date_close)}} = {{fmt.formatPercent(activeSection.futures_correction.ratio_pct)}}</text>
+  </view>
+
+  <!-- ETF 卡片列表 -->
+  <view wx:for="{{activeSection.etfs}}" wx:key="code" class="etf-card" data-code="{{item.code}}" bindtap="onToggle">
+    <!-- 头部: 名称 + 价格 -->
+    <view class="etf-header">
+      <view class="etf-left">
+        <text class="etf-name">{{item.name}}</text>
+        <text class="etf-code">{{item.code}}</text>
       </view>
-      <view wx:else class="holdings-status">
-        <text class="status-pending">点击获取持仓</text>
-        <text class="hint">同花顺账号登录</text>
+      <view class="etf-right">
+        <text class="etf-price mono">{{fmt.formatPrice(item.price)}}</text>
+        <text class="etf-change mono {{fmt.colorClass(item.change)}}">{{fmt.formatPercent(item.change)}}</text>
       </view>
     </view>
-    <view class="card-footer">
-      <text class="hint">{{hasHoldings ? '查看换仓建议' : '绑定后获取个性化建议'}}</text>
+
+    <!-- 快速指标：所有人可见 -->
+    <view class="etf-stats">
+      <view class="stat">
+        <text class="stat-label">净值</text>
+        <text class="stat-value mono">{{fmt.formatPrice(item.nav)}}</text>
+      </view>
+      <view wx:if="{{logged}}" class="stat">
+        <text class="stat-label">估算净值</text>
+        <text class="stat-value mono bold">{{fmt.formatPrice(item.estimated_nav)}}</text>
+      </view>
+      <view wx:if="{{logged}}" class="stat">
+        <text class="stat-label">估算溢价</text>
+        <text class="stat-value mono {{fmt.colorClass(item.display_premium)}}">{{fmt.formatPercent(item.display_premium)}}</text>
+      </view>
+      <view wx:else class="stat">
+        <text class="stat-label">溢价</text>
+        <text class="stat-value mono {{fmt.colorClass(fmt.navPremium(item.price, item.nav))}}">{{fmt.formatPercent(fmt.navPremium(item.price, item.nav))}}</text>
+      </view>
+      <view class="stat">
+        <text class="stat-label">分值</text>
+        <text class="stat-value mono bold">{{item.score}}</text>
+      </view>
+    </view>
+
+    <!-- 展开详情：仅登录可见 -->
+    <view wx:if="{{logged && expanded === item.code}}" class="etf-detail">
+      <view class="detail-row">
+        <text class="detail-label">估算溢价</text>
+        <text class="detail-value mono {{fmt.colorClass(item.display_premium)}}">{{fmt.formatPercent(item.display_premium)}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">3M 均溢价</text>
+        <text class="detail-value mono">{{fmt.formatPercent(item.avg_3m)}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">6M 均溢价</text>
+        <text class="detail-value mono">{{fmt.formatPercent(item.avg_6m)}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">1Y 均溢价</text>
+        <text class="detail-value mono">{{fmt.formatPercent(item.avg_1y)}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">溢价>7%天数</text>
+        <text class="detail-value mono {{item.days_gt7 > 30 ? 'red' : ''}}">{{item.days_gt7}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">年净值涨幅</text>
+        <text class="detail-value mono {{fmt.colorClass(item.nav_return_1y)}}">{{fmt.formatPercent(item.nav_return_1y)}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">年价格涨幅</text>
+        <text class="detail-value mono {{fmt.colorClass(item.price_return_1y)}}">{{fmt.formatPercent(item.price_return_1y)}}</text>
+      </view>
     </view>
   </view>
 
-  <!-- 底部提示 -->
-  <view class="footer-hint">
-    <text>以上内容仅供参考，不构成投资建议</text>
+  <!-- 说明 -->
+  <view class="footer-note">
+    <text>分值 = 溢价偏离历史均值 + 同类跟踪质量差异。越高 = 当前溢价越低于历史水平。</text>
   </view>
+
+  <view class="disclaimer">
+    <text>以上为公开数据整理，不构成投资建议。</text>
+  </view>
+
 </view>

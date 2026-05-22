@@ -1,28 +1,24 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/report/report",
-    "pages/backtest/backtest",
-    "pages/holdings/holdings",
-    "pages/settings/settings"
+    "pages/rotation/rotation",
+    "pages/login/login"
   ],
   "tabBar": {
-    "color": "#666",
-    "selectedColor": "#1a73e8",
-    "backgroundColor": "#fff",
-    "borderStyle": "white",
+    "color": "#9E9689",
+    "selectedColor": "#1A1613",
+    "backgroundColor": "#F5EFE4",
+    "borderStyle": "black",
     "list": [
-      {"pagePath": "pages/index/index", "text": "首页"},
-      {"pagePath": "pages/report/report", "text": "溢价"},
-      {"pagePath": "pages/backtest/backtest", "text": "回测"},
-      {"pagePath": "pages/holdings/holdings", "text": "持仓"}
+      {"pagePath": "pages/index/index", "text": "数据分析"},
+      {"pagePath": "pages/rotation/rotation", "text": "纳指实盘"}
     ]
   },
   "window": {
-    "navigationBarTitleText": "ETF投资助手",
-    "navigationBarBackgroundColor": "#1a73e8",
+    "navigationBarTitleText": "纳指轮动记录工具",
+    "navigationBarBackgroundColor": "#1A1613",
     "navigationBarTextStyle": "white",
-    "backgroundColor": "#f8f9fa",
+    "backgroundColor": "#F5EFE4",
     "backgroundTextStyle": "dark"
   },
   "networkTimeout": {

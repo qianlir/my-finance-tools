@@ -1,0 +1,123 @@
+<wxs src="../../utils/format.wxs" module="fmt" />
+
+<view class="loading" wx:if="{{loading}}">
+  <text>加载中...</text>
+</view>
+
+<view class="error" wx:if="{{error && !loading}}">
+  <text>{{error}}</text>
+</view>
+
+<!-- 未登录 -->
+<view wx:if="{{!logged && !loading}}" class="locked">
+  <text class="locked-text">需要验证后查看</text>
+</view>
+
+<!-- 已登录 -->
+<view class="page" wx:if="{{logged && summary && !loading}}">
+
+  <!-- 副标题 -->
+  <view class="subtitle">
+    <text>{{start_date}} ~ {{end_date}} · {{trading_days}}交易日 · T={{threshold}}</text>
+  </view>
+
+  <!-- 当前持仓 -->
+  <view class="current">
+    <text class="current-label">当前持有</text>
+    <text class="current-name">{{summary.current_holding_name}}</text>
+    <text class="current-code mono">{{summary.current_holding}}</text>
+  </view>
+
+  <!-- 指标卡片 -->
+  <view class="metrics">
+    <view class="metric-card highlight">
+      <text class="metric-label">轮动收益</text>
+      <text class="metric-value mono red">{{fmt.formatPercent(summary.rotation_return)}}</text>
+    </view>
+    <view class="metric-card">
+      <text class="metric-label">最低溢价</text>
+      <text class="metric-value mono">{{fmt.formatPercent(summary.min_premium_return)}}</text>
+    </view>
+    <view class="metric-card">
+      <text class="metric-label">等权持有({{equal_weight_etfs}}只)</text>
+      <text class="metric-value mono">{{fmt.formatPercent(summary.equal_weight_return)}}</text>
+    </view>
+    <view class="metric-card">
+      <text class="metric-label">ALPHA</text>
+      <text class="metric-value mono green">{{fmt.formatPercent(summary.alpha)}}</text>
+    </view>
+  </view>
+
+  <!-- 走势图 -->
+  <view class="chart-wrap">
+    <view class="chart-legend">
+      <view class="legend-item"><view class="legend-dot dot-red"></view><text>轮动</text></view>
+      <view class="legend-item"><view class="legend-dot dot-green"></view><text>最低溢价</text></view>
+      <view class="legend-item"><view class="legend-dot dot-gold"></view><text>等权</text></view>
+    </view>
+    <canvas type="2d" id="rotChart" class="chart-canvas"></canvas>
+  </view>
+
+  <!-- 市值对比 -->
+  <view class="values-bar">
+    <view class="vb-item">
+      <text class="vb-label">轮动</text>
+      <text class="vb-value mono">¥{{fmt.formatMoney(summary.rotation_value)}}</text>
+    </view>
+    <view class="vb-item">
+      <text class="vb-label">最低溢价</text>
+      <text class="vb-value mono">¥{{fmt.formatMoney(summary.min_premium_value)}}</text>
+    </view>
+    <view class="vb-item">
+      <text class="vb-label">等权</text>
+      <text class="vb-value mono">¥{{fmt.formatMoney(summary.equal_weight_value)}}</text>
+    </view>
+  </view>
+
+  <!-- 操作记录 -->
+  <view class="section-label">操作记录 · {{summary.trade_count}}次</view>
+
+  <view wx:for="{{trades}}" wx:key="seq" class="trade">
+    <view class="trade-head">
+      <text class="trade-seq mono">#{{item.seq}}</text>
+      <text class="trade-date mono">{{item.date}}</text>
+      <text class="trade-action {{item.action === '建仓' ? 'act-init' : 'act-swap'}}">{{item.action}}</text>
+    </view>
+
+    <view wx:if="{{item.action === '建仓'}}" class="trade-body">
+      <view class="tb-row">
+        <text class="tb-label">买入</text>
+        <text class="tb-value">{{item.buy_name}} {{item.buy_code}}</text>
+      </view>
+    </view>
+
+    <view wx:else class="trade-body">
+      <view class="tb-row">
+        <text class="tb-label red">卖</text>
+        <text class="tb-value">{{item.sell_name}}</text>
+        <text class="tb-score mono">{{fmt.formatScore(item.sell_score)}}</text>
+      </view>
+      <view class="tb-row">
+        <text class="tb-label green">买</text>
+        <text class="tb-value">{{item.buy_name}}</text>
+        <text class="tb-score mono">{{fmt.formatScore(item.buy_score)}}</text>
+      </view>
+      <view class="tb-diff">
+        <text class="mono" wx:if="{{item.score_diff != null}}">分值差 +{{item.score_diff}}</text>
+        <text class="mono" wx:if="{{item.premium_diff != null}}"> · 溢价差 {{fmt.formatPercent(item.premium_diff)}}</text>
+      </view>
+    </view>
+
+    <view class="trade-foot">
+      <text class="tf-val mono">¥{{fmt.formatMoney(item.rotation_value)}}</text>
+      <text wx:if="{{item.lead > 0}}" class="tf-lead mono red">+¥{{fmt.formatMoney(item.lead)}}</text>
+    </view>
+  </view>
+
+  <view class="divider"></view>
+
+  <view class="disclaimer">
+    <text>以上为历史操作记录，不构成投资建议。</text>
+  </view>
+
+</view>

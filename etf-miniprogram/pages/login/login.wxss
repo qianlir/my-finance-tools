@@ -1,0 +1,58 @@
+.page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 0 40px;
+}
+
+.form {
+  width: 100%;
+}
+
+.label {
+  font-size: 11px;
+  color: rgba(26,22,19,0.5);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.user-box {
+  background: rgba(26,22,19,0.05);
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.user-text {
+  font-family: 'Menlo', 'SF Mono', monospace;
+  font-size: 12px;
+  color: #1A1613;
+  word-break: break-all;
+}
+
+.input {
+  border-bottom: 1px solid rgba(26,22,19,0.15);
+  padding: 12px 0;
+  font-size: 14px;
+  color: #1A1613;
+  margin-bottom: 16px;
+}
+
+.err {
+  display: block;
+  font-size: 12px;
+  color: #A8342A;
+  margin-bottom: 12px;
+}
+
+.btn {
+  text-align: center;
+  padding: 10px;
+  background: #1A1613;
+  color: #F5EFE4;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 500;
+}
