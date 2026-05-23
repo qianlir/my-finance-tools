@@ -1006,8 +1006,55 @@ def backfill_futures_history(days=30):
     return updated
 
 
+def _backfill_index_from_sina(close_col, sina_symbol, days=30):
+    """从新浪全球指数API回补历史收盘价 (gi.finance.sina.com.cn)"""
+    try:
+        url = f'https://gi.finance.sina.com.cn/hq/daily?symbol={sina_symbol}&num={days + 5}'
+        resp = requests.get(url, timeout=15)
+        data = resp.json().get('result', {}).get('data', [])
+        if not isinstance(data, list) or not data:
+            return 0
+    except Exception:
+        return 0
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    updated = 0
+    for i, row in enumerate(data):
+        date_str = row['d']
+        close = float(row['c'])
+        if close <= 0 or date_str >= today_str:
+            continue
+        prev_close = float(data[i - 1]['c']) if i > 0 and float(data[i - 1]['c']) > 0 else None
+        cursor.execute("SELECT date FROM futures_data WHERE date = ?", (date_str,))
+        if cursor.fetchone():
+            cursor.execute(f"UPDATE futures_data SET {close_col} = ? WHERE date = ? AND {close_col} IS NULL",
+                         (close, date_str))
+        else:
+            cursor.execute(f"INSERT INTO futures_data (date, us_date, {close_col}) VALUES (?, ?, ?)",
+                         (date_str, date_str, close))
+        if cursor.rowcount > 0:
+            updated += 1
+    conn.commit()
+    conn.close()
+    return updated
+
+
+SINA_INDEX_MAP = {
+    'nk_idx_close': 'NKY',
+    'dax_idx_close': 'DAX',
+    'cac_idx_close': 'CAC',
+    'sensex_idx_close': 'SENSEX',
+}
+
+
 def backfill_nikkei_index_history(days=30):
-    """从东方财富回补日经225指数历史收盘价到 futures_data 的 nk_idx_close 列"""
+    """回补日经225指数历史收盘价 (优先新浪, fallback东方财富)"""
+    n = _backfill_index_from_sina('nk_idx_close', 'NKY', days)
+    if n > 0:
+        return n
+    # fallback: 东方财富
     try:
         url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
                '?secid=100.N225&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
@@ -1057,7 +1104,11 @@ def backfill_nikkei_index_history(days=30):
 
 
 def backfill_dax_index_history(days=30):
-    """从东方财富回补DAX指数历史收盘价到 futures_data 的 dax_idx_close 列"""
+    """回补DAX指数历史收盘价 (优先新浪, fallback东方财富)"""
+    n = _backfill_index_from_sina('dax_idx_close', 'DAX', days)
+    if n > 0:
+        return n
+    # fallback: 东方财富
     try:
         url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
                '?secid=100.GDAXI&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
@@ -1107,7 +1158,11 @@ def backfill_dax_index_history(days=30):
 
 
 def backfill_cac_index_history(days=30):
-    """从东方财富回补CAC40指数历史收盘价到 futures_data 的 cac_idx_close 列"""
+    """回补CAC40指数历史收盘价 (优先新浪, fallback东方财富)"""
+    n = _backfill_index_from_sina('cac_idx_close', 'CAC', days)
+    if n > 0:
+        return n
+    # fallback: 东方财富
     try:
         url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
                '?secid=100.FCHI&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
@@ -1157,7 +1212,11 @@ def backfill_cac_index_history(days=30):
 
 
 def backfill_sensex_index_history(days=30):
-    """从东方财富回补SENSEX指数历史收盘价到 futures_data 的 sensex_idx_close 列"""
+    """回补SENSEX指数历史收盘价 (优先新浪, fallback东方财富)"""
+    n = _backfill_index_from_sina('sensex_idx_close', 'SENSEX', days)
+    if n > 0:
+        return n
+    # fallback: 东方财富
     try:
         url = ('https://push2his.eastmoney.com/api/qt/stock/kline/get'
                '?secid=100.SENSEX&fields1=f1&fields2=f51,f52,f53&klt=101&fqt=0'
