@@ -1360,36 +1360,29 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
               date))
 
         # 日经指数 + DAX指数 + CAC指数 + SENSEX指数：单独 UPDATE + COALESCE
+        # 指数收盘价: 直接写入 (不COALESCE, 因为实时值就是收盘价)
         if nk_idx_close is not None:
             cursor.execute("""
                 UPDATE futures_data
-                SET nk_idx_close = COALESCE(nk_idx_close, ?),
-                    nk_idx_prev_close = COALESCE(nk_idx_prev_close, ?),
-                    nk_idx_change_pct = COALESCE(nk_idx_change_pct, ?)
+                SET nk_idx_close = ?, nk_idx_prev_close = ?, nk_idx_change_pct = ?
                 WHERE date = ?
             """, (nk_idx_close, nk_idx_prev_close, nk_idx_change, date))
         if dax_idx_close is not None:
             cursor.execute("""
                 UPDATE futures_data
-                SET dax_idx_close = COALESCE(dax_idx_close, ?),
-                    dax_idx_prev_close = COALESCE(dax_idx_prev_close, ?),
-                    dax_idx_change_pct = COALESCE(dax_idx_change_pct, ?)
+                SET dax_idx_close = ?, dax_idx_prev_close = ?, dax_idx_change_pct = ?
                 WHERE date = ?
             """, (dax_idx_close, dax_idx_prev_close, dax_idx_change, date))
         if cac_idx_close is not None:
             cursor.execute("""
                 UPDATE futures_data
-                SET cac_idx_close = COALESCE(cac_idx_close, ?),
-                    cac_idx_prev_close = COALESCE(cac_idx_prev_close, ?),
-                    cac_idx_change_pct = COALESCE(cac_idx_change_pct, ?)
+                SET cac_idx_close = ?, cac_idx_prev_close = ?, cac_idx_change_pct = ?
                 WHERE date = ?
             """, (cac_idx_close, cac_idx_prev_close, cac_idx_change, date))
         if sensex_idx_close is not None:
             cursor.execute("""
                 UPDATE futures_data
-                SET sensex_idx_close = COALESCE(sensex_idx_close, ?),
-                    sensex_idx_prev_close = COALESCE(sensex_idx_prev_close, ?),
-                    sensex_idx_change_pct = COALESCE(sensex_idx_change_pct, ?)
+                SET sensex_idx_close = ?, sensex_idx_prev_close = ?, sensex_idx_change_pct = ?
                 WHERE date = ?
             """, (sensex_idx_close, sensex_idx_prev_close, sensex_idx_change, date))
         if sox_idx_close is not None:
