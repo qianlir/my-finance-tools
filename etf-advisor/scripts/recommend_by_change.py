@@ -1209,17 +1209,25 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             'price_return_1y': avg_by_period.get('price_return_1y', 0),
         })
 
-    # 获取期货价格比值法数据
-    # 用第一个ETF的nav_date作为代表
+    # 获取期货价格比值法数据 (t-k/t-k-1 锚点法)
+    # 用第一个ETF作为代表, 找锚点
     rep_nav_date = None
-    for etf in etf_list:
-        info = get_nav_info(etf['code'])
+    nav_date_close = 0
+    current_futures_price = 0
+
+    rep_code = etf_list[0]['code'] if etf_list else None
+    if rep_code:
+        _est, _formula, _anc_nav, _anc_close, _cur_price = estimate_nav_by_anchor(
+            rep_code, index_type=index_type)
+        if _anc_close and _cur_price:
+            nav_date_close = _anc_close
+            current_futures_price = _cur_price
+
+        # nav_date 仍用 get_nav_info 取 (供前端展示)
+        info = get_nav_info(rep_code)
         if info and info.get('nav_date'):
             rep_nav_date = info['nav_date']
-            break
-    
-    nav_date_close = get_nav_date_futures_close(rep_nav_date, index_type) if rep_nav_date else 0
-    current_futures_price = get_current_futures_price(index_type)
+
     futures_ratio = (current_futures_price / nav_date_close) if nav_date_close and current_futures_price else 0
 
     # 获取期货显示数据
