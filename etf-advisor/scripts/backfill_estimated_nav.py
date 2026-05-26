@@ -35,34 +35,112 @@ SYMBOL_TO_COL = {
 }
 
 
+def _us_market_holidays(year):
+    """计算指定年份 NYSE/NASDAQ 休市日 (9 个固定假日 + Good Friday)。
+
+    返回 set of 'YYYY-MM-DD' strings。
+    """
+    from datetime import date, timedelta
+    holidays = set()
+
+    def _observe(d):
+        """周六 → 前一天周五, 周日 → 后一天周一"""
+        if d.weekday() == 5:
+            return d - timedelta(days=1)
+        elif d.weekday() == 6:
+            return d + timedelta(days=1)
+        return d
+
+    def _nth_weekday(year, month, weekday, n):
+        """第 n 个星期几 (weekday: 0=Mon)"""
+        d = date(year, month, 1)
+        while d.weekday() != weekday:
+            d += timedelta(days=1)
+        return d + timedelta(weeks=n - 1)
+
+    def _last_weekday(year, month, weekday):
+        """最后一个星期几"""
+        if month == 12:
+            d = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            d = date(year, month + 1, 1) - timedelta(days=1)
+        while d.weekday() != weekday:
+            d -= timedelta(days=1)
+        return d
+
+    def _easter(year):
+        """Anonymous Gregorian algorithm"""
+        a = year % 19
+        b, c = divmod(year, 100)
+        d, e = divmod(b, 4)
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i, k = divmod(c, 4)
+        l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        month = (h + l - 7 * m + 114) // 31
+        day = ((h + l - 7 * m + 114) % 31) + 1
+        return date(year, month, day)
+
+    # 1. New Year's Day
+    holidays.add(_observe(date(year, 1, 1)))
+    # 2. MLK Day (3rd Mon Jan)
+    holidays.add(_nth_weekday(year, 1, 0, 3))
+    # 3. Presidents Day (3rd Mon Feb)
+    holidays.add(_nth_weekday(year, 2, 0, 3))
+    # 4. Good Friday (Easter - 2)
+    holidays.add(_easter(year) - timedelta(days=2))
+    # 5. Memorial Day (last Mon May)
+    holidays.add(_last_weekday(year, 5, 0))
+    # 6. Juneteenth (Jun 19, observed since 2021)
+    if year >= 2021:
+        holidays.add(_observe(date(year, 6, 19)))
+    # 7. Independence Day (Jul 4)
+    holidays.add(_observe(date(year, 7, 4)))
+    # 8. Labor Day (1st Mon Sep)
+    holidays.add(_nth_weekday(year, 9, 0, 1))
+    # 9. Thanksgiving (4th Thu Nov)
+    holidays.add(_nth_weekday(year, 11, 3, 4))
+    # 10. Christmas (Dec 25)
+    holidays.add(_observe(date(year, 12, 25)))
+
+    return {d.strftime('%Y-%m-%d') for d in holidays}
+
+
 def build_trading_days(conn):
-    """判断美股真实交易日, 两个条件同时满足:
+    """判断美股真实交易日 (NASDAQ 100 实盘开盘日):
     1. 工作日 (周一~周五)
-    2. NQ/ES/YM 任一 close 相比前一天变化了
+    2. 不是 NYSE/NASDAQ 休市日
+    3. futures_data 中有收盘价数据
     返回美股真实交易日的 set"""
     from datetime import datetime
+
+    # 预计算所有涉及年份的假日
     rows = conn.execute("""
-        SELECT date, nq_close, es_close, ym_close FROM futures_data
+        SELECT date FROM futures_data
         WHERE (nq_close IS NOT NULL OR es_close IS NOT NULL OR ym_close IS NOT NULL)
         ORDER BY date
     """).fetchall()
+    if not rows:
+        return set()
+
+    all_dates = [r['date'] for r in rows]
+    years = set()
+    for d in all_dates:
+        years.add(int(d[:4]))
+    us_holidays = set()
+    for y in years:
+        us_holidays |= _us_market_holidays(y)
+
     us_trading_days = set()
-    prev = {}
-    for r in rows:
-        # 条件1: 工作日
-        dt = datetime.strptime(r['date'], '%Y-%m-%d')
+    for d in all_dates:
+        dt = datetime.strptime(d, '%Y-%m-%d')
         if dt.weekday() >= 5:
             continue
-        # 条件2: 价格变化
-        changed = False
-        for col in ['nq_close', 'es_close', 'ym_close']:
-            val = r[col]
-            if val is not None and val != prev.get(col):
-                changed = True
-            if val is not None:
-                prev[col] = val
-        if changed:
-            us_trading_days.add(r['date'])
+        if d in us_holidays:
+            continue
+        us_trading_days.add(d)
     return us_trading_days
 
 
