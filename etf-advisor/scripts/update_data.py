@@ -1962,19 +1962,17 @@ def _find_nav_anchor(conn, code, date, close_col, symbol):
             if row['nav'] == prev_nav:
                 continue  # NAV 没变, 净值未公布, 跳过
 
-        # 条件 2: t-k-1 (前一个日历日) 是对应市场交易日
-        prev_d = (datetime.strptime(d, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
-        if not _is_market_trading_day(prev_d, symbol, holidays_cache):
-            continue
-
-        # 条件 3: t-k-1 在 futures_data 中有收盘价
+        # 条件 2: 找 t-k 之前最近的市场交易日 (不一定是前一个日历日,
+        #         遇到周末/假日会跳过, 如周二的NAV对应上周五的收盘)
         fc_row = conn.execute(f"""
-            SELECT {close_col} FROM futures_data
-            WHERE date = ? AND {close_col} IS NOT NULL AND {close_col} > 0
-        """, (prev_d,)).fetchone()
+            SELECT date, {close_col} FROM futures_data
+            WHERE date < ? AND {close_col} IS NOT NULL AND {close_col} > 0
+            ORDER BY date DESC LIMIT 5
+        """, (d,)).fetchall()
 
-        if fc_row and fc_row[close_col]:
-            return row['nav'], fc_row[close_col]
+        for fr in fc_row:
+            if _is_market_trading_day(fr['date'], symbol, holidays_cache):
+                return row['nav'], fr[close_col]
 
     return None, None
 
