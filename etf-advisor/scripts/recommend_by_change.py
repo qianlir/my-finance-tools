@@ -882,6 +882,67 @@ def _get_us_nav_date_close(nav_date: str, index_type: str) -> float:
     return float(row[0]) if row and row[0] else 0
 
 
+# ============= 估算净值符号 → 列名映射 =============
+_SYM_TO_CLOSE_COL = {
+    'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close',
+    'GC': 'gc_close', 'CL': 'cl_close',
+    'N225': 'nk_idx_close', 'GDAXI': 'dax_idx_close',
+    'CAC': 'cac_idx_close', 'SENSEX': 'sensex_idx_close',
+    'SOX': 'sox_idx_close',
+}
+
+# 指数类型 → 估算符号映射
+_INDEX_TYPE_TO_SYM = {
+    'NASDAQ': 'NQ', 'SP500': 'ES', 'DOW': 'YM',
+    'GOLD': 'GC', 'CRUDE': 'CL',
+    'NIKKEI': 'N225', 'DAX': 'GDAXI', 'CAC': 'CAC',
+    'SENSEX': 'SENSEX', 'SOX': 'SOX',
+}
+
+
+def estimate_nav_by_anchor(code: str, estimate_symbol: str = None,
+                           index_type: str = None) -> tuple:
+    """用 t-k/t-k-1 锚点法估算净值。
+
+    找最小 k, 使得 t-k 是 A 股交易日 (有 NAV), t-k-1 是对应市场真实交易日。
+    est_nav = nav(t-k) × current_futures / futures_close(t-k-1)
+
+    Args:
+        code: ETF 代码
+        estimate_symbol: 'NQ', 'ES', 'N225', ... (优先使用)
+        index_type: 'NASDAQ', 'SP500', ... (从 INDEX_CONFIG 推导 symbol)
+
+    Returns: (estimated_nav, nav_formula_str, anchor_nav, anchor_close, current_price)
+             失败返回 (None, None, None, None, None)
+    """
+    # 确定 symbol 和 close_col
+    sym = estimate_symbol
+    if not sym and index_type:
+        sym = _INDEX_TYPE_TO_SYM.get(index_type)
+    if not sym:
+        return None, None, None, None, None
+
+    close_col = _SYM_TO_CLOSE_COL.get(sym)
+    if not close_col:
+        return None, None, None, None, None
+
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from update_data import _find_nav_anchor, _get_current_futures_price
+
+    conn = get_db_connection()
+    today = datetime.now().strftime('%Y-%m-%d')
+    anchor_nav, anchor_close = _find_nav_anchor(conn, code, today, close_col, sym)
+    current_price = _get_current_futures_price(conn, close_col)
+    conn.close()
+
+    if not anchor_nav or not anchor_close or not current_price or anchor_close <= 0:
+        return None, None, None, None, None
+
+    est = anchor_nav * (current_price / anchor_close)
+    formula = f"{anchor_nav:.3f} × ({current_price:.1f}/{anchor_close:.1f}) = {est:.3f}"
+    return est, formula, anchor_nav, anchor_close, current_price
+
+
 def get_current_futures_price(index_type: str) -> float:
     """获取最新期货/指数价格"""
     if index_type not in INDEX_CONFIG:
@@ -1095,26 +1156,13 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 else:
                     estimated_nav = nav
                     display_premium = current.get('premium_rate', 0)
-            elif _fc and _fc['estimate_method'] == 'futures' and _fc.get('estimate_symbol') and nav:
-                _sym = _fc['estimate_symbol']
-                _idx_type_for_sym = {'NQ': 'NASDAQ', 'ES': 'SP500', 'YM': 'DOW', 'GC': 'GOLD', 'CL': 'CRUDE'}.get(_sym, 'DOW')
-                nav_date_close = get_nav_date_futures_close(nav_date, _idx_type_for_sym)
-                current_futures_price = get_current_futures_price(_idx_type_for_sym)
-                if nav_date_close and current_futures_price:
-                    estimated_nav = nav * (current_futures_price / nav_date_close)
+            elif _fc and _fc['estimate_method'] in ('futures', 'index') and _fc.get('estimate_symbol') and nav:
+                _est, _formula, _, _, _ = estimate_nav_by_anchor(
+                    code, estimate_symbol=_fc['estimate_symbol'])
+                if _est:
+                    estimated_nav = _est
                     display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                    nav_formula = f"{nav:.3f} × ({current_futures_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
-                else:
-                    estimated_nav = nav
-                    display_premium = current.get('premium_rate', 0)
-            elif _fc and _fc['estimate_method'] == 'index' and _fc.get('estimate_symbol') and nav:
-                _idx_type = _fc['estimate_symbol']
-                nav_date_close = get_nav_date_futures_close(nav_date, _idx_type)
-                current_idx_price = get_current_futures_price(_idx_type)
-                if nav_date_close and current_idx_price:
-                    estimated_nav = nav * (current_idx_price / nav_date_close)
-                    display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                    nav_formula = f"{nav:.3f} × ({current_idx_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
+                    nav_formula = _formula
                 else:
                     estimated_nav = nav
                     display_premium = current.get('premium_rate', 0)
@@ -1122,13 +1170,13 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 estimated_nav = nav
                 display_premium = current.get('premium_rate', 0)
         else:
-            # 期货/指数比值法（现有逻辑）
-            nav_date_close = get_nav_date_futures_close(nav_date, index_type)
-            current_futures_price = get_current_futures_price(index_type)
-            if nav and nav_date_close and current_futures_price:
-                estimated_nav = nav * (current_futures_price / nav_date_close)
+            # 期货/指数比值法: t-k/t-k-1 锚点法
+            _est, _formula, _, _, _ = estimate_nav_by_anchor(
+                code, index_type=index_type)
+            if _est and nav:
+                estimated_nav = _est
                 display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                nav_formula = f"{nav:.3f} × ({current_futures_price:.1f}/{nav_date_close:.1f}) = {estimated_nav:.3f}"
+                nav_formula = _formula
             elif nav:
                 estimated_nav = nav
                 display_premium = current.get('premium_rate', 0)
@@ -1148,6 +1196,7 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             'estimated_nav': round(estimated_nav, 4) if estimated_nav else None,
             'nav_formula': nav_formula,
             'display_premium': display_premium,
+            'official_premium': current.get('premium_rate', 0),  # 官方公布溢价
             'change': change,           # 涨幅使用价格变化（今天A股实际涨跌）
             'avg_by_period': avg_by_period,
             # 风险指标
@@ -1388,6 +1437,7 @@ def generate_report_json(nasdaq_results: List[Dict], sp500_results: List[Dict],
                 "nav_change": round(r.get('nav_change', 0), 2),
                 "change": round(r['change'], 2),
                 "display_premium": round(r['display_premium'], 2),
+                "official_premium": round(r.get('official_premium', 0), 2),
                 "excess_3m": round(r['excess_by_period'].get('3M', 0), 2),
                 "avg_3m": round(r['avg_by_period'].get('3M', 0), 2),
                 "excess_6m": round(r['excess_by_period'].get('6M', 0), 2),

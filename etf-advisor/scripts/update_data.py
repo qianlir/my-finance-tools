@@ -1934,28 +1934,40 @@ def _is_market_trading_day(date_str, symbol, holidays_cache):
 
 
 def _find_nav_anchor(conn, code, date, close_col, symbol):
-    """找最小 k 使得 t-k 是 A 股交易日 (有 NAV), t-k-1 是对应市场交易日。
+    """找最小 k 使得:
+    1. t-k 是 A 股交易日且 NAV 已公布 (NAV 与前一天不同)
+    2. t-k-1 是对应市场真实交易日
 
     返回 (anchor_nav, anchor_futures_close) 或 (None, None)。
     公式: est_nav = anchor_nav × current_futures / anchor_futures_close
     """
-    # 取最近 15 个有 NAV 的 A 股交易日
+    # 取最近 20 个有 NAV 的 A 股交易日 (多取几天, 需要相邻比较)
     candidates = conn.execute("""
         SELECT date, nav FROM etf_data
         WHERE code = ? AND nav IS NOT NULL AND nav > 0 AND date <= ?
-        ORDER BY date DESC LIMIT 15
+        ORDER BY date DESC LIMIT 20
     """, (code, date)).fetchall()
+
+    if len(candidates) < 2:
+        return None, None
 
     holidays_cache = {}
 
-    for row in candidates:
+    for i, row in enumerate(candidates):
         d = row['date']
-        prev_d = (datetime.strptime(d, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
 
+        # 条件 1: NAV 已公布 — 和下一行 (更早的日期) NAV 不同
+        if i + 1 < len(candidates):
+            prev_nav = candidates[i + 1]['nav']
+            if row['nav'] == prev_nav:
+                continue  # NAV 没变, 净值未公布, 跳过
+
+        # 条件 2: t-k-1 (前一个日历日) 是对应市场交易日
+        prev_d = (datetime.strptime(d, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
         if not _is_market_trading_day(prev_d, symbol, holidays_cache):
             continue
 
-        # t-k-1 是市场交易日, 取该日期货/指数收盘价
+        # 条件 3: t-k-1 在 futures_data 中有收盘价
         fc_row = conn.execute(f"""
             SELECT {close_col} FROM futures_data
             WHERE date = ? AND {close_col} IS NOT NULL AND {close_col} > 0
