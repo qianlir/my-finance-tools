@@ -1907,13 +1907,105 @@ def estimate_nav_by_holdings(fund_code, confirmed_nav):
     return est_nav, est_change
 
 
+def _get_market_holidays(symbol, year):
+    """获取指定期货/指数符号对应市场的假日集合。
+
+    美股类 (NQ/ES/YM/GC/CL/SOX) 使用精确假日历;
+    其他市场 fallback 返回空集 (仅靠 weekday + 有无收盘价过滤)。
+    """
+    US_SYMBOLS = {'NQ', 'ES', 'YM', 'GC', 'CL', 'SOX'}
+    if symbol in US_SYMBOLS:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from backfill_estimated_nav import _us_market_holidays
+        return _us_market_holidays(year)
+    return set()
+
+
+def _is_market_trading_day(date_str, symbol, holidays_cache):
+    """判断 date_str 是否是该市场的交易日。"""
+    dt = datetime.strptime(date_str, '%Y-%m-%d')
+    if dt.weekday() >= 5:
+        return False
+    year = int(date_str[:4])
+    if year not in holidays_cache:
+        holidays_cache[year] = _get_market_holidays(symbol, year)
+    return date_str not in holidays_cache[year]
+
+
+def _find_nav_anchor(conn, code, date, close_col, symbol):
+    """找最小 k 使得 t-k 是 A 股交易日 (有 NAV), t-k-1 是对应市场交易日。
+
+    返回 (anchor_nav, anchor_futures_close) 或 (None, None)。
+    公式: est_nav = anchor_nav × current_futures / anchor_futures_close
+    """
+    # 取最近 15 个有 NAV 的 A 股交易日
+    candidates = conn.execute("""
+        SELECT date, nav FROM etf_data
+        WHERE code = ? AND nav IS NOT NULL AND nav > 0 AND date <= ?
+        ORDER BY date DESC LIMIT 15
+    """, (code, date)).fetchall()
+
+    holidays_cache = {}
+
+    for row in candidates:
+        d = row['date']
+        prev_d = (datetime.strptime(d, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        if not _is_market_trading_day(prev_d, symbol, holidays_cache):
+            continue
+
+        # t-k-1 是市场交易日, 取该日期货/指数收盘价
+        fc_row = conn.execute(f"""
+            SELECT {close_col} FROM futures_data
+            WHERE date = ? AND {close_col} IS NOT NULL AND {close_col} > 0
+        """, (prev_d,)).fetchone()
+
+        if fc_row and fc_row[close_col]:
+            return row['nav'], fc_row[close_col]
+
+    return None, None
+
+
+def _get_current_futures_price(conn, close_col):
+    """获取最新期货/指数价格: 优先真收盘, fallback prev×(1+change%)。"""
+    prev_col = close_col.replace('_close', '_prev_close')
+    change_col = close_col.replace('_close', '_change_pct')
+    cur_row = conn.execute(f"""
+        SELECT {close_col}, {prev_col}, {change_col} FROM futures_data
+        ORDER BY date DESC LIMIT 1
+    """).fetchone()
+    if not cur_row:
+        return None
+    if cur_row[close_col]:
+        return cur_row[close_col]
+    if cur_row[prev_col]:
+        chg = cur_row[change_col] or 0
+        return cur_row[prev_col] * (1 + chg / 100)
+    return None
+
+
+# 期货/指数符号 → 收盘价列名
+_SYMBOL_TO_CLOSE_COL = {
+    'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close',
+    'GC': 'gc_close', 'CL': 'cl_close',
+    'N225': 'nk_idx_close', 'GDAXI': 'dax_idx_close',
+    'CAC': 'cac_idx_close', 'SENSEX': 'sensex_idx_close',
+    'SOX': 'sox_idx_close',
+}
+
+
 def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
     """统一的估算净值计算入口 (4 种方法).
 
+    对于 futures/index 类: 使用 t-k/t-k-1 锚点法。
+    找最小 k, 使得 t-k 是 A 股交易日, t-k-1 是对应市场真实交易日,
+    est_nav = nav(t-k) × current_futures / futures_close(t-k-1)。
+
     Args:
         code: ETF 代码
-        nav: 确认净值
-        nav_date: 净值对应日期 (美股收盘日)
+        nav: 当日确认净值 (仅 holdings/fundgz 使用)
+        nav_date: 净值对应日期 (仅 holdings/fundgz 使用)
         estimate_method: 'futures', 'index', 'holdings', 'fundgz'
         estimate_symbol: 'NQ', 'ES', 'YM', 'GC', 'CL', 'N225', 'GDAXI', ...
 
@@ -1923,65 +2015,22 @@ def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
         return nav
 
     if estimate_method in ('futures', 'index'):
-        # 期货/指数比值法: nav × (current / nav_date_close)
-        symbol_to_cols = {
-            'NQ': ('nq_close', 'nq_prev_close'),
-            'ES': ('es_close', 'es_prev_close'),
-            'YM': ('ym_close', 'ym_prev_close'),
-            'GC': ('gc_close', 'gc_prev_close'),
-            'CL': ('cl_close', 'cl_prev_close'),
-            'N225': ('nk_idx_close', 'nk_idx_prev_close'),
-            'GDAXI': ('dax_idx_close', 'dax_idx_prev_close'),
-            'CAC': ('cac_idx_close', 'cac_idx_prev_close'),
-            'SENSEX': ('sensex_idx_close', 'sensex_idx_prev_close'),
-            'SOX': ('sox_idx_close', 'sox_idx_prev_close'),
-        }
-        cols = symbol_to_cols.get(estimate_symbol)
-        if not cols:
+        close_col = _SYMBOL_TO_CLOSE_COL.get(estimate_symbol)
+        if not close_col:
             return nav
 
-        close_col, prev_col = cols
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # 当前价: close (真收盘), 或 prev × (1+change%) (实时价)
-        change_col = close_col.replace('_close', '_change_pct')
-        cur_row = conn.execute(f"""
-            SELECT {close_col}, {prev_col}, {change_col} FROM futures_data
-            ORDER BY date DESC LIMIT 1
-        """).fetchone()
-        current_price = None
-        if cur_row:
-            if cur_row[close_col]:
-                current_price = cur_row[close_col]
-            elif cur_row[prev_col]:
-                chg = cur_row[change_col] or 0
-                current_price = cur_row[prev_col] * (1 + chg / 100)
-
-        # nav_date 对应的收盘价 (nav_date = EastMoney净值日期 = 美股交易日)
-        nav_date_close = None
-        if nav_date:
-            nd_row = conn.execute(f"""
-                SELECT {close_col} FROM futures_data
-                WHERE date <= ? AND {close_col} IS NOT NULL
-                ORDER BY date DESC LIMIT 1
-            """, (nav_date,)).fetchone()
-            if nd_row:
-                nav_date_close = nd_row[close_col]
-
-        # fallback: 没有 nav_date_close 时用 prev_close
-        if not nav_date_close and current_price:
-            pc_row = conn.execute(f"""
-                SELECT {prev_col} FROM futures_data
-                WHERE {prev_col} IS NOT NULL ORDER BY date DESC LIMIT 1
-            """).fetchone()
-            if pc_row:
-                nav_date_close = pc_row[prev_col]
-
+        today = datetime.now().strftime('%Y-%m-%d')
+        anchor_nav, anchor_close = _find_nav_anchor(
+            conn, code, today, close_col, estimate_symbol
+        )
+        current_price = _get_current_futures_price(conn, close_col)
         conn.close()
 
-        if current_price and nav_date_close and nav_date_close > 0:
-            return nav * (current_price / nav_date_close)
+        if anchor_nav and anchor_close and anchor_close > 0 and current_price:
+            return anchor_nav * (current_price / anchor_close)
         return nav
 
     elif estimate_method == 'holdings':
@@ -2000,6 +2049,10 @@ def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
 def compute_and_save_estimated_nav(date):
     """计算当日所有 ETF 的估算净值并写入 etf_data.estimated_nav.
 
+    对 futures/index 类 ETF 使用 t-k/t-k-1 锚点法:
+      找最小 k, 使 t-k 有确认 NAV 且 t-k-1 是对应市场真实交易日,
+      est = nav(t-k) × current_futures / futures_close(t-k-1)
+
     在 update_realtime() 末尾调用 (期货 + 持仓价格已保存后).
     用 UPDATE 只改 estimated_nav 列, 不影响其他字段.
 
@@ -2008,17 +2061,26 @@ def compute_and_save_estimated_nav(date):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
+    # 查 fund_config
+    fc_rows = conn.execute("""
+        SELECT code, estimate_method, estimate_symbol FROM fund_config WHERE enabled = 1
+    """).fetchall()
+    fc_map = {r['code']: r for r in fc_rows}
+
     # 查当日有 nav 的 ETF
     etf_rows = conn.execute("""
         SELECT code, nav, nav_date FROM etf_data
         WHERE date = ? AND nav IS NOT NULL AND nav > 0
     """, (date,)).fetchall()
 
-    # 查 fund_config
-    fc_rows = conn.execute("""
-        SELECT code, estimate_method, estimate_symbol FROM fund_config WHERE enabled = 1
-    """).fetchall()
-    fc_map = {r['code']: r for r in fc_rows}
+    # 预取各 symbol 的当前期货价格 (避免重复查询)
+    current_prices = {}
+    for fc in fc_rows:
+        sym = fc['estimate_symbol']
+        if sym not in current_prices and fc['estimate_method'] in ('futures', 'index'):
+            col = _SYMBOL_TO_CLOSE_COL.get(sym)
+            if col:
+                current_prices[sym] = _get_current_futures_price(conn, col)
 
     updated = 0
     for row in etf_rows:
@@ -2027,13 +2089,29 @@ def compute_and_save_estimated_nav(date):
         if not fc:
             continue
 
-        est_nav = estimate_nav_for_etf(
-            code, row['nav'], row['nav_date'],
-            fc['estimate_method'], fc['estimate_symbol']
-        )
+        method = fc['estimate_method']
+        symbol = fc['estimate_symbol']
+        est_nav = None
+
+        if method in ('futures', 'index'):
+            close_col = _SYMBOL_TO_CLOSE_COL.get(symbol)
+            cur_price = current_prices.get(symbol)
+            if close_col and cur_price:
+                anchor_nav, anchor_close = _find_nav_anchor(
+                    conn, code, date, close_col, symbol
+                )
+                if anchor_nav and anchor_close and anchor_close > 0:
+                    est_nav = anchor_nav * (cur_price / anchor_close)
+
+        elif method == 'holdings':
+            est_nav, _ = estimate_nav_by_holdings(code, row['nav'])
+
+        elif method == 'fundgz':
+            gz = get_fundgz_nav(code)
+            if gz and gz.get('estimated_nav') and gz['estimated_nav'] > 0:
+                est_nav = gz['estimated_nav']
 
         if est_nav and est_nav > 0 and abs(est_nav - row['nav']) / row['nav'] < 0.5:
-            # 合理性检查: 估算值偏离确认值 < 50%
             conn.execute("""
                 UPDATE etf_data SET estimated_nav = ? WHERE date = ? AND code = ?
             """, (round(est_nav, 4), date, code))
