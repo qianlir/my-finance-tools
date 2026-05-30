@@ -329,13 +329,16 @@ function NavHistory({ history }) {
           {page.map(r => (
             <tr key={r.date} style={{ borderBottom: '1px solid var(--ink-10)' }}>
               <td style={{ padding: '5px 0', color: 'var(--fg-2)' }}>{r.date.slice(5)}</td>
-              <td style={{ textAlign: 'right', padding: '5px 0' }}>{r.nav.toFixed(4)}</td>
+              <td style={{ textAlign: 'right', padding: '5px 0', color: r.nav != null ? 'var(--ink)' : 'var(--fg-muted)' }}>{r.nav != null ? r.nav.toFixed(4) : '—'}</td>
               <td style={{ textAlign: 'right', padding: '5px 0', color: r.est ? 'var(--ink)' : 'var(--fg-muted)' }}>{r.est ? r.est.toFixed(4) : '—'}</td>
               <td style={{ textAlign: 'right', padding: '5px 0', color: r.err != null ? chg(r.err) : 'var(--fg-muted)' }}>{r.err != null ? (r.err > 0 ? '+' : '') + r.err.toFixed(2) + '%' : '—'}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--fg-muted)', fontFamily: 'var(--font-ui)' }}>
+        T日净值 = T-1日美股收盘净值（次日公布后回填）
+      </div>
     </div>
   );
 }

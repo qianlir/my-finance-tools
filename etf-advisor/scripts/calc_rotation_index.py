@@ -26,11 +26,14 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import sys
+
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR / ".."
 DB_PATH = str(PROJECT_ROOT / "data" / "etf_premium.db")
 POOL_PATH = PROJECT_ROOT / "memory" / "knowledge" / "etf" / "rotation-pool.json"
 OUTPUT_DIR = PROJECT_ROOT / "data"
+HOLDING_CACHE_PATH = PROJECT_ROOT / "data" / "rotation_holding.json"
 
 # ETF配置：每个指数对应的常规ETF列表（排除LOF）
 INDEX_ETFS_CONFIG = {
@@ -451,9 +454,12 @@ def simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, co
             rotation_value = cash
             switched = 1
 
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            trade_time = datetime.now().strftime('%H:%M:%S') if date == today_str else None
+
             trade_seq += 1
             trades.append({
-                'seq': trade_seq, 'date': date, 'action': '换仓',
+                'seq': trade_seq, 'date': date, 'time': trade_time, 'action': '换仓',
                 'sell_code': switch_from, 'sell_name': code_to_name.get(switch_from, switch_from),
                 'sell_premium': round(old_premium, 2) if old_premium else None,
                 'sell_score': round(holding_score, 2),
@@ -724,6 +730,9 @@ def process_index(conn, index_type, pool_cfg, args):
     print(f"模拟{strategy_name}(阈值={threshold})...")
     result_rows, trades = simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, code_to_name)
 
+    # 盘中切换检测 + 飞书通知
+    check_intraday_switch(index_type, trades, code_to_name, threshold)
+
     # 生成 JSON 输出
     output_file = OUTPUT_DIR / f'rotation_{index_type.lower()}.json'
     generate_json(conn, index_type, strategy_name, threshold, pool_codes, codes, code_to_name, trades, output_file)
@@ -738,6 +747,80 @@ def process_index(conn, index_type, pool_cfg, args):
         'codes': codes,
         'code_to_name': code_to_name,
     }
+
+
+def _load_holding_cache():
+    if HOLDING_CACHE_PATH.exists():
+        try:
+            return json.loads(HOLDING_CACHE_PATH.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_holding_cache(cache):
+    HOLDING_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def check_intraday_switch(index_type, trades, code_to_name, threshold):
+    """检测盘中切换并发飞书通知。
+
+    比对 rotation_holding.json 缓存，如果今天产生了新的换仓且缓存中未记录，
+    则记录时间戳并发送飞书。
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    today_trades = [t for t in trades if t['date'] == today and t['action'] == '换仓']
+    if not today_trades:
+        return
+
+    trade = today_trades[-1]  # 取最新一笔
+    cache = _load_holding_cache()
+    cached = cache.get(index_type, {})
+
+    # 已经记录过同一笔切换
+    if (cached.get('date') == today
+            and cached.get('holding') == trade['buy_code']):
+        return
+
+    # 新切换！记录时间
+    now_time = datetime.now().strftime('%H:%M:%S')
+    if not trade.get('time'):
+        trade['time'] = now_time
+
+    cache[index_type] = {
+        'date': today,
+        'time': trade.get('time', now_time),
+        'holding': trade['buy_code'],
+        'holding_name': trade['buy_name'],
+        'from_code': trade['sell_code'],
+        'from_name': trade['sell_name'],
+        'score_diff': trade['score_diff'],
+    }
+    _save_holding_cache(cache)
+
+    # 发飞书
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from notify_top_change import send_feishu
+
+        def fmt(v):
+            return f"{v:+.2f}%" if v is not None else "N/A"
+
+        msg = "\n".join([
+            f"🔄 【{index_type}轮动换仓】",
+            "",
+            f"⏰ {today} {trade['time']}",
+            f"📤 卖出: {trade['sell_code']} {trade['sell_name']}",
+            f"   分值 {trade['sell_score']:.2f} | 溢价 {fmt(trade.get('sell_premium'))}",
+            f"📥 买入: {trade['buy_code']} {trade['buy_name']}",
+            f"   分值 {trade['buy_score']:.2f} | 溢价 {fmt(trade.get('buy_premium'))} | 价格 {trade['buy_price']:.3f}",
+            f"📊 分差 {trade['score_diff']:+.2f} (阈值T={threshold})",
+            f"💰 轮动净值 {trade['rotation_value']:.2f} | 超额 {trade['lead']:+.2f}",
+        ])
+        ok = send_feishu(msg)
+        print(f"  [{index_type}] 盘中换仓通知: {'已发送' if ok else '发送失败'}")
+    except Exception as e:
+        print(f"  [{index_type}] 飞书通知异常: {e}")
 
 
 def main():

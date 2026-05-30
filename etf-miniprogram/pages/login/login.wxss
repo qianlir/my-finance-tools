@@ -32,12 +32,32 @@
   word-break: break-all;
 }
 
+.hint {
+  font-size: 11px;
+  color: rgba(26,22,19,0.4);
+  margin-bottom: 12px;
+  margin-top: -8px;
+}
+
+.input-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+
 .input {
   border-bottom: 1px solid rgba(26,22,19,0.15);
-  padding: 12px 0;
+  padding: 12px 30px 12px 0;
   font-size: 14px;
   color: #1A1613;
-  margin-bottom: 16px;
+}
+
+.eye-icon {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  font-size: 16px;
+  opacity: 0.4;
+  cursor: pointer;
 }
 
 .err {

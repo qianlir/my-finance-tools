@@ -74,7 +74,7 @@
       </view>
       <view wx:else class="stat">
         <text class="stat-label">溢价</text>
-        <text class="stat-value mono {{fmt.colorClass(fmt.navPremium(item.price, item.nav))}}">{{fmt.formatPercent(fmt.navPremium(item.price, item.nav))}}</text>
+        <text class="stat-value mono {{fmt.colorClass(item.official_premium)}}">{{fmt.formatPercent(item.official_premium)}}</text>
       </view>
       <view class="stat">
         <text class="stat-label">分值</text>
@@ -118,10 +118,17 @@
   <!-- 说明 -->
   <view class="footer-note">
     <text>分值 = 溢价偏离历史均值 + 同类跟踪质量差异。越高 = 当前溢价越低于历史水平。</text>
+    <text wx:if="{{logged}}" class="note-sub">估算溢价 = 最新价格 ÷ 调整后净值</text>
+    <text wx:else class="note-sub">溢价 = 最新价格 ÷ 公布净值</text>
   </view>
 
   <view class="disclaimer">
     <text>以上为公开数据整理，不构成投资建议。</text>
+  </view>
+
+  <!-- 登录状态操作 -->
+  <view class="footer-actions">
+    <text wx:if="{{logged}}" class="logout-btn" bindtap="onLogout">退出登录</text>
   </view>
 
 </view>

@@ -9,12 +9,14 @@ Usage:
     python admin_server.py --port 8090
 """
 
+import atexit
 import hashlib
 import json
 import os
 import secrets
 import sqlite3
 import sys
+import threading
 import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -35,6 +37,94 @@ from update_data import (
 
 # Active tokens (in-memory, cleared on restart)
 _tokens = {}
+
+# --- Visitor tracking (memory-buffered, periodic flush) ---
+DATA_DIR = str(PROJECT_ROOT / "data")
+_DATA_FILES = {'report.json', 'rotation_index.json',
+               'rotation_nasdaq.json', 'rotation_sp500.json',
+               'rotation_nikkei.json', 'rotation_dax.json'}
+
+_visitor_lock = threading.Lock()
+_visitor_buf = {}  # {device_id: {'ip': str, 'ua': str, 'visits': int, 'last_seen': str}}
+_FLUSH_INTERVAL = 60
+
+
+def _init_visitor_table():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""CREATE TABLE IF NOT EXISTS visitors (
+        device_id TEXT PRIMARY KEY,
+        ip TEXT,
+        user_agent TEXT,
+        visits INTEGER DEFAULT 0,
+        first_seen TEXT,
+        last_seen TEXT
+    )""")
+    conn.commit()
+    conn.close()
+
+
+def _flush_visitors():
+    with _visitor_lock:
+        buf = _visitor_buf.copy()
+        _visitor_buf.clear()
+    if buf:
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn = sqlite3.connect(DB_PATH)
+        for did, info in buf.items():
+            conn.execute("""
+                INSERT INTO visitors (device_id, ip, user_agent, visits, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    ip = excluded.ip,
+                    user_agent = excluded.user_agent,
+                    visits = visits + excluded.visits,
+                    last_seen = excluded.last_seen
+            """, (did, info['ip'], info['ua'], info['visits'], now_str, info['last_seen']))
+        conn.commit()
+        conn.close()
+
+
+def _start_flush_timer():
+    _flush_visitors()
+    t = threading.Timer(_FLUSH_INTERVAL, _start_flush_timer)
+    t.daemon = True
+    t.start()
+
+
+def _record_visit(device_id, ip, ua):
+    if not device_id:
+        return
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with _visitor_lock:
+        if device_id in _visitor_buf:
+            _visitor_buf[device_id]['visits'] += 1
+            _visitor_buf[device_id]['last_seen'] = now_str
+            _visitor_buf[device_id]['ip'] = ip
+        else:
+            _visitor_buf[device_id] = {'ip': ip, 'ua': ua, 'visits': 1, 'last_seen': now_str}
+
+
+# --- File cache (avoid disk reads on every request) ---
+_file_cache = {}  # {filename: {'mtime': float, 'data': bytes}}
+
+
+def _read_cached_file(filename):
+    """Read file with mtime-based cache. Returns bytes or None."""
+    filepath = os.path.join(DATA_DIR, filename)
+    try:
+        mtime = os.path.getmtime(filepath)
+    except OSError:
+        return None
+    cached = _file_cache.get(filename)
+    if cached and cached['mtime'] == mtime:
+        return cached['data']
+    try:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        _file_cache[filename] = {'mtime': mtime, 'data': data}
+        return data
+    except OSError:
+        return None
 
 
 def get_db():
@@ -64,6 +154,19 @@ class AdminHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+
+        # --- Public: serve data JSON + track visitors ---
+        if path.startswith('/data/'):
+            filename = path[len('/data/'):]
+            if filename in _DATA_FILES:
+                device_id = self.headers.get('X-Device-Id', '')
+                ip = self.headers.get('X-Real-IP', self.client_address[0])
+                ua = self.headers.get('User-Agent', '')
+                _record_visit(device_id, ip, ua)
+                return self._serve_file(filename)
+            return self._json(404, {"error": "not found"})
+
+        # --- Admin: require auth ---
         token = self.headers.get('Authorization', '').replace('Bearer ', '')
 
         if not verify_token(token):
@@ -76,6 +179,8 @@ class AdminHandler(BaseHTTPRequestHandler):
             return self._get_holdings(code)
         elif path == '/admin/api/stock-prices':
             return self._get_stock_prices()
+        elif path == '/admin/api/visitors':
+            return self._get_visitors()
         else:
             return self._json(404, {"error": "not found"})
 
@@ -225,6 +330,26 @@ class AdminHandler(BaseHTTPRequestHandler):
         conn.close()
         return self._json(200, [dict(r) for r in rows])
 
+    def _serve_file(self, filename):
+        body = _read_cached_file(filename)
+        if body is None:
+            return self._json(404, {"error": "file not found"})
+        self.send_response(200)
+        self._cors_headers()
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _get_visitors(self):
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT * FROM visitors ORDER BY last_seen DESC"
+        ).fetchall()
+        conn.close()
+        return self._json(200, [dict(r) for r in rows])
+
     def _change_password(self, body):
         new_pw = body.get('password', '')
         if len(new_pw) < 4:
@@ -268,6 +393,9 @@ class AdminHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_database()
+    _init_visitor_table()
+    atexit.register(_flush_visitors)
+    _start_flush_timer()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
     server = HTTPServer(('127.0.0.1', port), AdminHandler)
     print(f"Admin API server on 127.0.0.1:{port}", flush=True)

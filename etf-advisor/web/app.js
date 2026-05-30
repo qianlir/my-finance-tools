@@ -765,9 +765,10 @@ function NavHistory({
   }, r.date.slice(5)), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: 'right',
-      padding: '5px 0'
+      padding: '5px 0',
+      color: r.nav != null ? 'var(--ink)' : 'var(--fg-muted)'
     }
-  }, r.nav.toFixed(4)), /*#__PURE__*/React.createElement("td", {
+  }, r.nav != null ? r.nav.toFixed(4) : '—'), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: 'right',
       padding: '5px 0',
@@ -779,7 +780,14 @@ function NavHistory({
       padding: '5px 0',
       color: r.err != null ? chg(r.err) : 'var(--fg-muted)'
     }
-  }, r.err != null ? (r.err > 0 ? '+' : '') + r.err.toFixed(2) + '%' : '—'))))));
+  }, r.err != null ? (r.err > 0 ? '+' : '') + r.err.toFixed(2) + '%' : '—'))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6,
+      fontSize: 10,
+      color: 'var(--fg-muted)',
+      fontFamily: 'var(--font-ui)'
+    }
+  }, "T\u65E5\u51C0\u503C = T-1\u65E5\u7F8E\u80A1\u6536\u76D8\u51C0\u503C\uFF08\u6B21\u65E5\u516C\u5E03\u540E\u56DE\u586B\uFF09"));
 }
 window.fmtPct = fmtPct;
 window.chg = chg;

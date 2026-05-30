@@ -268,6 +268,21 @@
   color: rgba(26,22,19,0.3);
 }
 
+/* 底部操作 */
+.footer-actions {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.logout-btn {
+  font-size: 11px;
+  color: rgba(26,22,19,0.4);
+  padding: 6px 16px;
+  border: 1px solid rgba(26,22,19,0.15);
+  border-radius: 2px;
+  display: inline-block;
+}
+
 /* 锁定 */
 .locked {
   display: flex;

@@ -24,6 +24,27 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 import statistics
 
+# ============= 工具函数 =============
+
+def _is_us_market_open():
+    """判断美股是否在常规交易时段（北京时间）
+    夏令时: 21:30 - 次日 04:00
+    冬令时: 22:30 - 次日 05:00
+    """
+    now = datetime.now()
+    year = now.year
+    mar1 = datetime(year, 3, 1)
+    dst_start = mar1.replace(day=(14 - mar1.weekday()) % 7 + 8)
+    nov1 = datetime(year, 11, 1)
+    dst_end = nov1.replace(day=(7 - nov1.weekday()) % 7 + 1)
+    is_dst = dst_start <= now.replace(hour=0, minute=0, second=0) < dst_end
+    t = now.hour * 60 + now.minute
+    if is_dst:
+        return t >= 21 * 60 + 30 or t < 4 * 60  # 21:30 - 04:00
+    else:
+        return t >= 22 * 60 + 30 or t < 5 * 60  # 22:30 - 05:00
+
+
 # ============= 配置 =============
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR / ".."
@@ -190,6 +211,11 @@ ETF_CONFIG = [
     {'code': '161715', 'name': '招商大宗商品LOF', 'index': 'LOF'},
     {'code': '161810', 'name': '银华内需LOF', 'index': 'LOF'},
     {'code': '160644', 'name': '港美互联网LOF', 'index': 'LOF'},
+    {'code': '160416', 'name': '标普石油LOF', 'index': 'LOF'},
+    {'code': '161226', 'name': '国投白银LOF', 'index': 'LOF'},
+    {'code': '161815', 'name': '抗通胀LOF', 'index': 'LOF'},
+    {'code': '164701', 'name': '黄金贵金属LOF', 'index': 'LOF'},
+    {'code': '165513', 'name': '全球商品LOF', 'index': 'LOF'},
 ]
 
 EXCLUDED_CODES = []
@@ -354,25 +380,63 @@ def get_previous_data() -> Tuple[Dict[str, float], str]:  # 返回 (价格字典
 
 
 def _get_nav_history(code: str, days: int = 30) -> list:
-    """获取最近N天的净值 vs 估算净值历史, 供详情页展示"""
+    """获取最近N天的净值 vs 估算净值历史, 供详情页展示
+
+    美股ETF净值时差处理:
+      T日公布的净值 = T-1日美股收盘净值, 应放在T-1行
+      T日估算净值 = 当天盘中计算, 放在T日行
+      这样同一行的 nav 和 est 都属于同一个A股交易日, 可以比较误差
+    """
     conn = get_db_connection()
     rows = conn.execute("""
-        SELECT date, nav, estimated_nav FROM etf_data
+        SELECT date, nav, nav_date, estimated_nav FROM etf_data
         WHERE code = ? AND nav IS NOT NULL
         ORDER BY date DESC LIMIT ?
-    """, (code, days)).fetchall()
+    """, (code, days + 1)).fetchall()  # 多取一条用于回退
     conn.close()
+    if not rows:
+        return []
+
+    # rows 按日期降序, 转为升序处理
+    rows = list(reversed(rows))
+
     result = []
-    for r in rows:
-        nav, est = r['nav'], r['estimated_nav']
-        err = round((est / nav - 1) * 100, 2) if est and nav and nav > 0 else None
+    for i, r in enumerate(rows):
+        # 当天的估算净值
+        est = r['estimated_nav']
+
+        # 公布净值回退: 下一天记录中的 nav 如果变化了, 就是今天的实际净值
+        # (因为基金公司在T+1公布T日净值)
+        actual_nav = None
+        if i + 1 < len(rows):
+            next_nav = rows[i + 1]['nav']
+            next_nav_date = rows[i + 1]['nav_date']
+            if next_nav != r['nav']:
+                # 净值变了 = 新净值公布, 属于今天
+                actual_nav = next_nav
+            elif next_nav_date and next_nav_date != r['nav_date']:
+                # nav_date 变了 = 虽然净值数值相同但确实是新公布的
+                actual_nav = next_nav
+            # 否则 nav 和 nav_date 都没变 = 尚未公布新净值, actual_nav = None
+        # 最后一天 (今天): 净值尚未公布
+        # actual_nav remains None
+
+        # 跳过 nav 和 est 都为空的行（历史无估算数据）
+        if not actual_nav and not est:
+            continue
+
+        err = round((est / actual_nav - 1) * 100, 2) if est and actual_nav and actual_nav > 0 else None
         result.append({
             "date": r['date'],
-            "nav": round(nav, 4),
+            "nav": round(actual_nav, 4) if actual_nav else None,
             "est": round(est, 4) if est else None,
             "err": err,
         })
-    result.reverse()  # 按日期升序
+
+    # 去掉多取的第一条 (只用来给第二条提供 nav 回退参考)
+    if len(result) > days:
+        result = result[1:]
+
     return result
 
 
@@ -885,7 +949,7 @@ def _get_us_nav_date_close(nav_date: str, index_type: str) -> float:
 # ============= 估算净值符号 → 列名映射 =============
 _SYM_TO_CLOSE_COL = {
     'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close',
-    'GC': 'gc_close', 'CL': 'cl_close',
+    'GC': 'gc_close', 'CL': 'cl_close', 'SI': 'si_close',
     'N225': 'nk_idx_close', 'GDAXI': 'dax_idx_close',
     'CAC': 'cac_idx_close', 'SENSEX': 'sensex_idx_close',
     'SOX': 'sox_idx_close',
@@ -1115,35 +1179,39 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
                 from update_data import estimate_nav_by_holdings, compute_proxy_betas, get_futures_anchor, get_futures_from_sina
                 estimated_nav, _est_chg = estimate_nav_by_holdings(code, nav)
                 display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                # 构建公式: NAV × 段1系数(盘后) × (1 + (NQ现/NQ锚-1)×β + (ES现/ES锚-1)×β)
-                try:
-                    seg1_factor = estimated_nav / nav if nav > 0 else 1
-                    _betas = compute_proxy_betas(code, 90)
-                    _anchor = get_futures_anchor()
-                    _nq = get_futures_from_sina('NQ')
-                    _es = get_futures_from_sina('ES')
-                    if _betas and _anchor and _nq and _anchor.get('nq_price'):
-                        _nq_now = _nq['price']
-                        _nq_anc = _anchor['nq_price']
-                        _es_now = _es['price'] if _es else 0
-                        _es_anc = _anchor.get('es_price') or _es_now
-                        _nq_seg = (_nq_now / _nq_anc - 1) * 100
-                        _es_seg = (_es_now / _es_anc - 1) * 100 if _es_anc > 0 else 0
-                        _seg2 = _betas['NQ'] * _nq_seg + _betas['ES'] * _es_seg
-                        _seg2_factor = 1 + _seg2 / 100
-                        estimated_nav = nav * seg1_factor * _seg2_factor
-                        display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
-                        nav_formula = (
-                            f"{nav:.3f} × {seg1_factor:.4f}(盘后) × "
-                            f"(1 + NQ({int(_nq_now)}/{int(_nq_anc)}-1)×β{_betas['NQ']:.2f}"
-                            f" + ES({int(_es_now)}/{int(_es_anc)}-1)×β{_betas['ES']:.2f})"
-                            f" = {estimated_nav:.3f}"
-                        )
-                    else:
-                        nav_formula = f"{nav:.3f} × {seg1_factor:.4f}(盘后) = {estimated_nav:.3f}"
-                except Exception as _e:
-                    nav_formula = f"{nav:.3f} × (1{_est_chg:+.2f}%) = {estimated_nav:.3f}"
-                    print(f"  {code} 公式生成异常: {_e}")
+                if _is_us_market_open():
+                    # 美股开盘：持仓有实时价，仅用持仓估算
+                    nav_formula = f"{nav:.3f} × (1{_est_chg:+.2f}%)(实时) = {estimated_nav:.3f}"
+                else:
+                    # 美股未开：持仓价冻结，叠加期货β修正
+                    try:
+                        seg1_factor = estimated_nav / nav if nav > 0 else 1
+                        _betas = compute_proxy_betas(code, 90)
+                        _anchor = get_futures_anchor()
+                        _nq = get_futures_from_sina('NQ')
+                        _es = get_futures_from_sina('ES')
+                        if _betas and _anchor and _nq and _anchor.get('nq_price'):
+                            _nq_now = _nq['price']
+                            _nq_anc = _anchor['nq_price']
+                            _es_now = _es['price'] if _es else 0
+                            _es_anc = _anchor.get('es_price') or _es_now
+                            _nq_seg = (_nq_now / _nq_anc - 1) * 100
+                            _es_seg = (_es_now / _es_anc - 1) * 100 if _es_anc > 0 else 0
+                            _seg2 = _betas['NQ'] * _nq_seg + _betas['ES'] * _es_seg
+                            _seg2_factor = 1 + _seg2 / 100
+                            estimated_nav = nav * seg1_factor * _seg2_factor
+                            display_premium = (current['price'] - estimated_nav) / estimated_nav * 100
+                            nav_formula = (
+                                f"{nav:.3f} × {seg1_factor:.4f}(盘后) × "
+                                f"(1 + NQ({int(_nq_now)}/{int(_nq_anc)}-1)×β{_betas['NQ']:.2f}"
+                                f" + ES({int(_es_now)}/{int(_es_anc)}-1)×β{_betas['ES']:.2f})"
+                                f" = {estimated_nav:.3f}"
+                            )
+                        else:
+                            nav_formula = f"{nav:.3f} × {seg1_factor:.4f}(盘后) = {estimated_nav:.3f}"
+                    except Exception as _e:
+                        nav_formula = f"{nav:.3f} × (1{_est_chg:+.2f}%) = {estimated_nav:.3f}"
+                        print(f"  {code} 公式生成异常: {_e}")
             elif _fc and _fc['estimate_method'] == 'fundgz' and nav:
                 # A 股 LOF：用东方财富 fundgz API 获取盘中估值
                 import sys; sys.path.insert(0, str(SCRIPT_DIR))

@@ -48,9 +48,12 @@ Page({
       wx.request({
         url: app.globalData.apiBase + '/report.json?t=' + Date.now(),
         method: 'GET',
+        header: { 'X-Device-Id': app.getDeviceId() },
         dataType: 'json',
         success: function (res) {
-          if (res.statusCode === 200 && res.data) {
+          if (res.statusCode === 429) {
+            self.setData({ error: '访问繁忙，请稍后再试', loading: false })
+          } else if (res.statusCode === 200 && res.data) {
             var d = res.data
             var time = d.generated_at ? d.generated_at.split(' ')[1] : ''
             var firstSection = d.sections && d.sections.length > 0 ? d.sections[0] : null

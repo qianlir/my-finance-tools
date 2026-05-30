@@ -23,9 +23,22 @@ App({
     return this.getDeviceId()
   },
 
-  // 期望的密码（base64 of 用户名）
+  // 期望的密码（前4个数字作为位置索引，提取对应字符）
   expectedPass: function () {
-    return this._b64(this.expectedUser())
+    var uid = this.expectedUser()
+    var numStr = uid.replace(/-/g, '')
+    var nums = numStr.match(/\d/g) || []
+    var indices = nums.slice(0, 4).map(function(n) { return parseInt(n) })
+
+    var result = ''
+    for (var i = 0; i < 4; i++) {
+      if (i < indices.length && indices[i] < numStr.length) {
+        result += numStr.charAt(indices[i])
+      } else {
+        result += '0'
+      }
+    }
+    return result
   },
 
   isLoggedIn: function () {
@@ -66,22 +79,5 @@ App({
       else s += chars.charAt(Math.random() * 16 | 0)
     }
     return s
-  },
-
-  _b64: function (str) {
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
-    var out = ''
-    var i = 0
-    while (i < str.length) {
-      var c1 = str.charCodeAt(i++)
-      var c2 = i < str.length ? str.charCodeAt(i++) : NaN
-      var c3 = i < str.length ? str.charCodeAt(i++) : NaN
-      var e1 = c1 >> 2
-      var e2 = ((c1 & 3) << 4) | (isNaN(c2) ? 0 : c2 >> 4)
-      var e3 = isNaN(c2) ? 64 : ((c2 & 15) << 2) | (isNaN(c3) ? 0 : c3 >> 6)
-      var e4 = isNaN(c3) ? 64 : c3 & 63
-      out += chars.charAt(e1) + chars.charAt(e2) + chars.charAt(e3) + chars.charAt(e4)
-    }
-    return out
   }
 })

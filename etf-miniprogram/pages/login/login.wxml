@@ -1,10 +1,13 @@
 <view class="page">
   <view class="form">
-    <view class="label">用户名（点击复制）</view>
+    <view class="label">设备ID（点击复制）</view>
     <view class="user-box" bindtap="onCopyUser">
       <text class="user-text">{{user}}</text>
     </view>
-    <input class="input" placeholder="密码" password="true" value="{{pass}}" bindinput="onPassInput" />
+    <view class="input-wrap">
+      <input class="input" placeholder="密码" password="{{!showPass}}" value="{{pass}}" bindinput="onPassInput" />
+      <text class="eye-icon" bindtap="onTogglePass">{{showPass ? '🙈' : '👁️'}}</text>
+    </view>
     <text wx:if="{{err}}" class="err">{{err}}</text>
     <view class="btn" bindtap="onSubmit">确认</view>
   </view>

@@ -2,7 +2,8 @@ Page({
   data: {
     user: '',
     pass: '',
-    err: ''
+    err: '',
+    showPass: false
   },
 
   onLoad: function () {
@@ -14,12 +15,16 @@ Page({
     this.setData({ pass: e.detail.value, err: '' })
   },
 
+  onTogglePass: function () {
+    this.setData({ showPass: !this.data.showPass })
+  },
+
   onCopyUser: function () {
     var self = this
     wx.setClipboardData({
       data: self.data.user,
       success: function () {
-        wx.showToast({ title: '用户名已复制', icon: 'none', duration: 1500 })
+        wx.showToast({ title: '设备ID已复制', icon: 'none', duration: 1500 })
       }
     })
   },

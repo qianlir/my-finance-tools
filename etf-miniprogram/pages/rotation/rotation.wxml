@@ -8,13 +8,7 @@
   <text>{{error}}</text>
 </view>
 
-<!-- 未登录 -->
-<view wx:if="{{!logged && !loading}}" class="locked">
-  <text class="locked-text">需要验证后查看</text>
-</view>
-
-<!-- 已登录 -->
-<view class="page" wx:if="{{logged && summary && !loading}}">
+<view class="page" wx:if="{{summary && !loading}}">
 
   <!-- 副标题 -->
   <view class="subtitle">
@@ -80,7 +74,7 @@
   <view wx:for="{{trades}}" wx:key="seq" class="trade">
     <view class="trade-head">
       <text class="trade-seq mono">#{{item.seq}}</text>
-      <text class="trade-date mono">{{item.date}}</text>
+      <text class="trade-date mono">{{item.date}}{{item.time ? ' ' + item.time : ''}}</text>
       <text class="trade-action {{item.action === '建仓' ? 'act-init' : 'act-swap'}}">{{item.action}}</text>
     </view>
 
@@ -118,6 +112,11 @@
 
   <view class="disclaimer">
     <text>以上为历史操作记录，不构成投资建议。</text>
+  </view>
+
+  <!-- 底部操作 -->
+  <view class="footer-actions">
+    <text wx:if="{{logged}}" class="logout-btn" bindtap="onLogout">退出登录</text>
   </view>
 
 </view>

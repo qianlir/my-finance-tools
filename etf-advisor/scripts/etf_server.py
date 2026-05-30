@@ -85,7 +85,7 @@ def run_update():
     try:
         subprocess.run(
             [python_cmd, str(SCRIPT_DIR / "update_data.py"), "--realtime"],
-            cwd=str(PROJECT_ROOT), timeout=60, check=True,
+            cwd=str(PROJECT_ROOT), timeout=120, check=True,
             capture_output=True
         )
         subprocess.run(

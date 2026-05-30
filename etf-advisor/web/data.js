@@ -19,12 +19,25 @@ window.switchRotationIndex = function(indexType) {
   }
 };
 
+function getDeviceId() {
+  var id = localStorage.getItem('device_id');
+  if (!id) {
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem('device_id', id);
+  }
+  return id;
+}
+
 (async function loadData() {
   try {
+    const headers = { 'X-Device-Id': getDeviceId() };
     const indices = ['nasdaq', 'sp500', 'nikkei', 'dax'];
     const [reportResp, ...rotationResps] = await Promise.all([
-      fetch('/data/report.json?t=' + Date.now()),
-      ...indices.map(idx => fetch('/data/rotation_' + idx + '.json?t=' + Date.now())),
+      fetch('/data/report.json?t=' + Date.now(), { headers }),
+      ...indices.map(idx => fetch('/data/rotation_' + idx + '.json?t=' + Date.now(), { headers })),
     ]);
     if (reportResp.ok) {
       window.REPORT = await reportResp.json();

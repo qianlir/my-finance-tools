@@ -82,6 +82,11 @@ ETF_LIST = [
     {'code': '161810', 'name': '银华内需LOF', 'company': '银华基金', 'market': 'sz', 'index': 'LOF'},
     {'code': '160644', 'name': '港美互联网LOF', 'company': '景顺长城', 'market': 'sz', 'index': 'LOF'},
     {'code': '501225', 'name': '全球芯片LOF', 'company': '景顺长城', 'market': 'sh', 'index': 'OTHERS'},
+    {'code': '160416', 'name': '标普石油LOF', 'company': '华安基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161226', 'name': '国投白银LOF', 'company': '国投瑞银', 'market': 'sz', 'index': 'LOF'},
+    {'code': '161815', 'name': '抗通胀LOF', 'company': '银华基金', 'market': 'sz', 'index': 'LOF'},
+    {'code': '164701', 'name': '黄金贵金属LOF', 'company': '汇添富', 'market': 'sz', 'index': 'LOF'},
+    {'code': '165513', 'name': '全球商品LOF', 'company': '中信保诚', 'market': 'sz', 'index': 'LOF'},
 ]
 
 
@@ -123,8 +128,8 @@ def get_tencent_history(code, market, days=90):
             data = json.loads(response.text[5:])
             if data.get('code') == 0 and 'data' in data:
                 etf_data = data['data'].get(f'{market}{code}', {})
-                if etf_data and 'qfqday' in etf_data:
-                    return etf_data['qfqday']
+                if etf_data:
+                    return etf_data.get('qfqday') or etf_data.get('day') or None
     except Exception:
         pass
     return None
@@ -500,6 +505,11 @@ def get_realtime_futures():
     cl_data = get_futures_from_sina('CL')
     if cl_data:
         futures_data['CL'] = cl_data
+
+    # SI期货 (白银)
+    si_data = get_futures_from_sina('SI')
+    if si_data:
+        futures_data['SI'] = si_data
 
     # NK期货 (日经225)
     nk_data = get_futures_from_sina('NK')
@@ -1383,6 +1393,7 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                       dax_idx_close=None, dax_idx_prev_close=None, dax_idx_change=None,
                       gc_close=None, gc_prev_close=None, gc_change=None, gc_source='sina',
                       cl_close=None, cl_prev_close=None, cl_change=None, cl_source='sina',
+                      si_close=None, si_prev_close=None, si_change=None, si_source='sina',
                       cac_idx_close=None, cac_idx_prev_close=None, cac_idx_change=None,
                       sensex_idx_close=None, sensex_idx_prev_close=None, sensex_idx_change=None,
                       sox_idx_close=None, sox_idx_prev_close=None, sox_idx_change=None,
@@ -1407,7 +1418,8 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
                 ym_prev_close = COALESCE(?, ym_prev_close), ym_change_pct = COALESCE(?, ym_change_pct), ym_source = COALESCE(?, ym_source),
                 nk_prev_close = COALESCE(?, nk_prev_close), nk_change_pct = COALESCE(?, nk_change_pct), nk_source = COALESCE(?, nk_source),
                 gc_prev_close = COALESCE(?, gc_prev_close), gc_change_pct = COALESCE(?, gc_change_pct), gc_source = COALESCE(?, gc_source),
-                cl_prev_close = COALESCE(?, cl_prev_close), cl_change_pct = COALESCE(?, cl_change_pct), cl_source = COALESCE(?, cl_source)
+                cl_prev_close = COALESCE(?, cl_prev_close), cl_change_pct = COALESCE(?, cl_change_pct), cl_source = COALESCE(?, cl_source),
+                si_prev_close = COALESCE(?, si_prev_close), si_change_pct = COALESCE(?, si_change_pct), si_source = COALESCE(?, si_source)
             WHERE date = ?
         """, (us_date,
               nq_prev_close, nq_change, nq_source,
@@ -1416,6 +1428,7 @@ def save_futures_data(date, nq_change, es_change, ym_change=None,
               nk_prev_close, nk_change, nk_source,
               gc_prev_close, gc_change, gc_source,
               cl_prev_close, cl_change, cl_source,
+              si_prev_close, si_change, si_source,
               date))
 
         # 日经指数 + DAX指数 + CAC指数 + SENSEX指数：单独 UPDATE + COALESCE
@@ -1998,7 +2011,7 @@ def _get_current_futures_price(conn, close_col):
 # 期货/指数符号 → 收盘价列名
 _SYMBOL_TO_CLOSE_COL = {
     'NQ': 'nq_close', 'ES': 'es_close', 'YM': 'ym_close',
-    'GC': 'gc_close', 'CL': 'cl_close',
+    'GC': 'gc_close', 'CL': 'cl_close', 'SI': 'si_close',
     'N225': 'nk_idx_close', 'GDAXI': 'dax_idx_close',
     'CAC': 'cac_idx_close', 'SENSEX': 'sensex_idx_close',
     'SOX': 'sox_idx_close',
@@ -2387,16 +2400,28 @@ def save_etf_records(records):
 
     for r in records:
         try:
+            # 先尝试插入（不覆盖已有记录的 estimated_nav）
             cursor.execute("""
-                INSERT OR REPLACE INTO etf_data
-                (date, timestamp, code, name, company, price, prev_close, nav, premium_rate, change_pct, nav_type, nav_date, is_fixed, estimated_nav)
+                INSERT OR IGNORE INTO etf_data
+                (date, timestamp, code, name, company, price, prev_close, nav, premium_rate,
+                 change_pct, nav_type, nav_date, is_fixed, estimated_nav)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (r['date'], f"{r['date']}T15:00:00", r['code'], r['name'],
                   r['company'], r['price'], r.get('prev_close'), r.get('nav'), r.get('premium_rate'),
                   r.get('change_pct'), r.get('nav_type', 'actual'),
-                  r.get('nav_date'),  # 净值实际日期
-                  r.get('is_fixed', 0),  # 是否为fixed数据
-                  r.get('estimated_nav')))
+                  r.get('nav_date'), r.get('is_fixed', 0), r.get('estimated_nav')))
+            if cursor.rowcount == 0:
+                # 记录已存在，只更新价格/净值等字段，保留 estimated_nav
+                cursor.execute("""
+                    UPDATE etf_data SET
+                        price = ?, prev_close = ?, nav = ?, premium_rate = ?,
+                        change_pct = ?, nav_date = COALESCE(?, nav_date),
+                        is_fixed = CASE WHEN ? > is_fixed THEN ? ELSE is_fixed END
+                    WHERE date = ? AND code = ?
+                """, (r['price'], r.get('prev_close'), r.get('nav'), r.get('premium_rate'),
+                      r.get('change_pct'), r.get('nav_date'),
+                      r.get('is_fixed', 0), r.get('is_fixed', 0),
+                      r['date'], r['code']))
             saved += 1
         except Exception as e:
             print(f"保存记录失败 {r.get('code')}: {e}")
@@ -2672,7 +2697,12 @@ def update_realtime():
     # 先检查并补齐缺失的历史数据
     _backfill_missing_days()
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    # 4点前属于前一个A股交易日（美股尚未收盘）
+    now = datetime.now()
+    if now.hour < 4:
+        today = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+    else:
+        today = now.strftime('%Y-%m-%d')
     records = []
 
     for etf in ETF_LIST:
@@ -2744,6 +2774,10 @@ def update_realtime():
         cl_close = None
         cl_prev_close = cl.get('prev_close')
         cl_change = cl.get('change_pct')
+        si = futures.get('SI', {})
+        si_close = None
+        si_prev_close = si.get('prev_close')
+        si_change = si.get('change_pct')
         nk_idx = futures.get('NK_IDX', {})
         nk_idx_close = nk_idx.get('price')
         nk_idx_prev_close = nk_idx.get('prev_close')
@@ -2786,6 +2820,7 @@ def update_realtime():
                                  dax_idx_change=dax_idx_change,
                                  gc_close=gc_close, gc_prev_close=gc_prev_close, gc_change=gc_change,
                                  cl_close=cl_close, cl_prev_close=cl_prev_close, cl_change=cl_change,
+                                 si_close=si_close, si_prev_close=si_prev_close, si_change=si_change,
                                  cac_idx_close=cac_idx_close, cac_idx_prev_close=cac_idx_prev_close,
                                  cac_idx_change=cac_idx_change,
                                  sensex_idx_close=sensex_idx_close, sensex_idx_prev_close=sensex_idx_prev_close,
