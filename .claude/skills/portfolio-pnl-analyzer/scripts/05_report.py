@@ -433,6 +433,115 @@ def main():
                      f"</tr>\n")
         html += "</table>\n<hr>\n"
 
+    # === 月度趋势图(如果 monthly_curve.json 存在) ===
+    curve_path = DATA / 'monthly_curve.json'
+    if curve_path.exists():
+        with open(curve_path) as f:
+            curve = json.load(f)
+
+        def render_svg_chart(title, dates, series_dict, chart_id, width=1060, height=320):
+            """内联 SVG 折线图。series_dict = {label: [values]}"""
+            if not dates or not series_dict:
+                return ''
+            pad_l, pad_r, pad_t, pad_b = 80, 20, 40, 60
+            cw = width - pad_l - pad_r
+            ch = height - pad_t - pad_b
+            all_vals = [v for vs in series_dict.values() for v in vs]
+            if not all_vals:
+                return ''
+            v_min = min(min(all_vals), 0)
+            v_max = max(all_vals) * 1.1 if max(all_vals) > 0 else max(all_vals) * 0.9
+            if v_max == v_min:
+                v_max = v_min + 1
+            n = len(dates)
+
+            def x(i): return pad_l + (i / max(n - 1, 1)) * cw
+            def y(v): return pad_t + ch - ((v - v_min) / (v_max - v_min)) * ch
+
+            colors = ['#2d6cdf', '#c3262d', '#1f7a37', '#e6a817', '#8b5cf6',
+                      '#06b6d4', '#f97316', '#ec4899', '#6366f1', '#14b8a6',
+                      '#84cc16', '#a855f7', '#ef4444']
+            svg = f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:{width}px;font-family:-apple-system,sans-serif">\n'
+            svg += f'<text x="{width//2}" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">{title}</text>\n'
+            # 零线
+            if v_min < 0:
+                y0 = y(0)
+                svg += f'<line x1="{pad_l}" y1="{y0:.1f}" x2="{pad_l+cw}" y2="{y0:.1f}" stroke="#ccc" stroke-dasharray="4"/>\n'
+            # Y 轴刻度(5 档)
+            for i in range(6):
+                val = v_min + (v_max - v_min) * i / 5
+                yp = y(val)
+                label = f'{val/10000:.1f}万' if abs(val) >= 10000 else f'{val:.0f}'
+                svg += f'<text x="{pad_l-8}" y="{yp+4:.1f}" text-anchor="end" font-size="10" fill="#999">{label}</text>\n'
+                svg += f'<line x1="{pad_l}" y1="{yp:.1f}" x2="{pad_l+cw}" y2="{yp:.1f}" stroke="#f0f0f0"/>\n'
+            # X 轴标签
+            for i, d in enumerate(dates):
+                xp = x(i)
+                label = d[2:7]  # "25-01"
+                svg += f'<text x="{xp:.1f}" y="{height-10}" text-anchor="middle" font-size="9" fill="#999">{label}</text>\n'
+            # 数据线
+            for ci, (label, values) in enumerate(series_dict.items()):
+                if len(values) != n:
+                    continue
+                color = colors[ci % len(colors)]
+                points = ' '.join(f'{x(i):.1f},{y(v):.1f}' for i, v in enumerate(values))
+                svg += f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="2" stroke-linejoin="round"/>\n'
+                # 末端标签
+                last_v = values[-1]
+                svg += f'<circle cx="{x(n-1):.1f}" cy="{y(last_v):.1f}" r="3" fill="{color}"/>\n'
+            # 图例
+            lx = pad_l + 10
+            ly = pad_t + 5
+            for ci, label in enumerate(series_dict.keys()):
+                color = colors[ci % len(colors)]
+                svg += f'<rect x="{lx}" y="{ly}" width="12" height="3" fill="{color}"/>'
+                svg += f'<text x="{lx+16}" y="{ly+4}" font-size="9" fill="#666">{label}</text>\n'
+                lx += len(label) * 9 + 30
+                if lx > width - 100:
+                    lx = pad_l + 10; ly += 14
+            svg += '</svg>\n'
+            return svg
+
+        # 图 1: 月度总市值趋势
+        html += '<h2>📈 月度趋势图</h2>\n'
+        html += render_svg_chart(
+            f'组合总市值 · {curve["mv_dates"][0][:4]}~{curve["mv_dates"][-1]}',
+            curve['mv_dates'],
+            {'总市值': curve['mv_portfolio']},
+            'mv_total')
+
+        # 图 2: 2025 累计 P&L
+        if curve['dates_prior'] and curve['pl_prior_portfolio']:
+            # 按绝对值排序取 Top 5 板块
+            sec_final = {k: vs[-1] for k, vs in curve['pl_prior_sectors'].items() if vs}
+            top_secs = sorted(sec_final.keys(), key=lambda k: abs(sec_final[k]), reverse=True)[:5]
+            series = {'合计': curve['pl_prior_portfolio']}
+            for s in top_secs:
+                if len(curve['pl_prior_sectors'][s]) == len(curve['dates_prior']):
+                    series[s] = curve['pl_prior_sectors'][s]
+            html += render_svg_chart(
+                f'{PRIOR} 累计 P&L(月度)',
+                curve['dates_prior'], series, 'pl_prior')
+
+        # 图 3: 2026 YTD 累计 P&L
+        if curve['dates_cur'] and curve['pl_cur_portfolio']:
+            sec_final = {k: vs[-1] for k, vs in curve['pl_cur_sectors'].items() if vs}
+            top_secs = sorted(sec_final.keys(), key=lambda k: abs(sec_final[k]), reverse=True)[:5]
+            series = {'合计': curve['pl_cur_portfolio']}
+            for s in top_secs:
+                if len(curve['pl_cur_sectors'][s]) == len(curve['dates_cur']):
+                    series[s] = curve['pl_cur_sectors'][s]
+            html += render_svg_chart(
+                f'{CUR} YTD 累计 P&L(月度)',
+                curve['dates_cur'], series, 'pl_cur')
+
+        # 平均市值信息
+        avg_path = DATA / 'avg_mv.json'
+        if avg_path.exists():
+            with open(avg_path) as f:
+                avg = json.load(f)
+            html += f'<blockquote>月频平均市值: {PRIOR} 全年 ¥{avg["avg_mv_prior"]:,.0f}({avg["prior_months"]} 个月) · {CUR} YTD ¥{avg["avg_mv_cur"]:,.0f}({avg["cur_months"]} 个月)。收益率分母建议用月均市值,比期初/期末二点平均更准确。</blockquote>\n'
+
     html += f"""
 <h2>已知局限</h2>
 <ol>
