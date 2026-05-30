@@ -527,6 +527,32 @@ def main():
             svg += '</svg>\n'
             return svg
 
+        # ── 校准: 用 04 Hybrid P&L 终值等比缩放月度曲线 ──
+        # 06 纯 B 算法对 LOF 套利 / 港股汇率有偏差,04 Hybrid 更准
+        def calibrate_series(dates, portfolio_vals, sector_dict, actual_pl):
+            """等比缩放: 保持曲线形状,终点对齐 04 的权威数"""
+            if not portfolio_vals or not actual_pl:
+                return portfolio_vals, sector_dict
+            raw_end = portfolio_vals[-1]
+            if abs(raw_end) < 1:
+                return portfolio_vals, sector_dict
+            factor = actual_pl / raw_end
+            cal_portfolio = [round(v * factor) for v in portfolio_vals]
+            cal_sectors = {}
+            for k, vs in sector_dict.items():
+                if len(vs) == len(dates):
+                    cal_sectors[k] = [round(v * factor) for v in vs]
+            return cal_portfolio, cal_sectors
+
+        if curve['pl_prior_portfolio']:
+            curve['pl_prior_portfolio'], curve['pl_prior_sectors'] = calibrate_series(
+                curve['dates_prior'], curve['pl_prior_portfolio'],
+                curve['pl_prior_sectors'], total['pl_prior_year'])
+        if curve['pl_cur_portfolio']:
+            curve['pl_cur_portfolio'], curve['pl_cur_sectors'] = calibrate_series(
+                curve['dates_cur'], curve['pl_cur_portfolio'],
+                curve['pl_cur_sectors'], total['pl_cur_total'])
+
         # 图 1: 月度总市值趋势
         html += '<h2>📈 月度趋势图</h2>\n'
         html += render_svg_chart(
