@@ -7,6 +7,7 @@
   },
   "components": {
     "etf-advisor": "1.0.0",
-    "etf-evaluator": "1.0.0"
+    "etf-evaluator": "1.0.0",
+    "portfolio-pnl-analyzer": "1.0.0"
   }
 }
