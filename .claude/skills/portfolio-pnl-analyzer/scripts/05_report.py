@@ -467,13 +467,36 @@ def main():
             if v_min < 0:
                 y0 = y(0)
                 svg += f'<line x1="{pad_l}" y1="{y0:.1f}" x2="{pad_l+cw}" y2="{y0:.1f}" stroke="#ccc" stroke-dasharray="4"/>\n'
-            # Y 轴刻度(5 档)
+            # Y 轴刻度(5 档,取整到万)
+            def fmt_y(val):
+                av = abs(val)
+                if av >= 10000:
+                    w = val / 10000
+                    return f'{w:.0f}万' if abs(w) >= 1 else f'{w:.1f}万'
+                return f'{val:,.0f}'
+
+            # 取整 v_min/v_max 到"好看"的刻度
+            span = v_max - v_min
+            step_raw = span / 5
+            import math
+            mag = 10 ** math.floor(math.log10(max(abs(step_raw), 1)))
+            step = math.ceil(step_raw / mag) * mag
+            v_min_nice = math.floor(v_min / step) * step
+            v_max_nice = v_min_nice + step * 5
+            if v_max_nice < v_max:
+                v_max_nice += step
+
+            # 重新定义 y 映射用 nice 范围
+            def y_nice(v): return pad_t + ch - ((v - v_min_nice) / (v_max_nice - v_min_nice)) * ch
+
             for i in range(6):
-                val = v_min + (v_max - v_min) * i / 5
-                yp = y(val)
-                label = f'{val/10000:.1f}万' if abs(val) >= 10000 else f'{val:.0f}'
-                svg += f'<text x="{pad_l-8}" y="{yp+4:.1f}" text-anchor="end" font-size="10" fill="#999">{label}</text>\n'
+                val = v_min_nice + step * i
+                if val > v_max_nice: break
+                yp = y_nice(val)
+                svg += f'<text x="{pad_l-8}" y="{yp+4:.1f}" text-anchor="end" font-size="10" fill="#999">{fmt_y(val)}</text>\n'
                 svg += f'<line x1="{pad_l}" y1="{yp:.1f}" x2="{pad_l+cw}" y2="{yp:.1f}" stroke="#f0f0f0"/>\n'
+            # 替换 y 为 y_nice
+            y = y_nice
             # X 轴标签
             for i, d in enumerate(dates):
                 xp = x(i)
@@ -486,18 +509,20 @@ def main():
                 color = colors[ci % len(colors)]
                 points = ' '.join(f'{x(i):.1f},{y(v):.1f}' for i, v in enumerate(values))
                 svg += f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="2" stroke-linejoin="round"/>\n'
-                # 末端标签
+                # 末端圆点 + 数值标签
                 last_v = values[-1]
                 svg += f'<circle cx="{x(n-1):.1f}" cy="{y(last_v):.1f}" r="3" fill="{color}"/>\n'
-            # 图例
+                svg += f'<text x="{x(n-1)+6:.1f}" y="{y(last_v)+3:.1f}" font-size="8" fill="{color}">{fmt_y(last_v)}</text>\n'
+            # 图例(每行最多 4 个,避免重叠)
+            max_per_row = 4
             lx = pad_l + 10
             ly = pad_t + 5
             for ci, label in enumerate(series_dict.keys()):
                 color = colors[ci % len(colors)]
                 svg += f'<rect x="{lx}" y="{ly}" width="12" height="3" fill="{color}"/>'
                 svg += f'<text x="{lx+16}" y="{ly+4}" font-size="9" fill="#666">{label}</text>\n'
-                lx += len(label) * 9 + 30
-                if lx > width - 100:
+                lx += len(label) * 10 + 32
+                if (ci + 1) % max_per_row == 0:
                     lx = pad_l + 10; ly += 14
             svg += '</svg>\n'
             return svg
