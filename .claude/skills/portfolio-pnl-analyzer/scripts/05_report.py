@@ -593,6 +593,59 @@ def main():
                 avg = json.load(f)
             html += f'<blockquote>月频平均市值: {PRIOR} 全年 ¥{avg["avg_mv_prior"]:,.0f}({avg["prior_months"]} 个月) · {CUR} YTD ¥{avg["avg_mv_cur"]:,.0f}({avg["cur_months"]} 个月)。收益率分母建议用月均市值,比期初/期末二点平均更准确。</blockquote>\n'
 
+    # === LOF 套利分析(如果 lof_analysis.json 存在) ===
+    lof_path = DATA / 'lof_analysis.json'
+    if lof_path.exists():
+        with open(lof_path) as f:
+            lof = json.load(f)
+        arb = lof['arb_summary']
+        html += '<h2>🔄 LOF 套利分析</h2>\n'
+        html += '<p class="small">识别方法: 场外申购 = 买入记录中 fee/|amt| ≥ 0.02%(场内佣金 ≤0.01%, 申购费 ≥0.03%); '
+        html += '配对方法: 申购日 → T+1 起首次卖出日的当日加权均价。盈亏排行用同花顺"累计盈亏"口径(避免转入重复计算)。</p>\n'
+
+        # 汇总卡片
+        html += '<table class="tldr">\n'
+        html += f'<tr><td>申购套利标的数</td><td>{arb["total_codes"]} 个</td></tr>\n'
+        html += f'<tr><td>配对交易笔数</td><td>{arb["total_matched"]:,} 笔</td></tr>\n'
+        html += f'<tr><td>成功率(盈利笔数/总笔数)</td><td><b>{arb["win_rate"]:.0f}%</b> ({arb["total_wins"]}/{arb["total_matched"]})</td></tr>\n'
+        pl_cls = 'pos' if arb['total_arb_pl'] > 0 else 'neg'
+        html += f'<tr><td>申购套利总 P&L</td><td><span class="{pl_cls}"><b>¥{arb["total_arb_pl"]:+,.0f}</b></span></td></tr>\n'
+        html += '</table>\n'
+
+        # 申购套利明细表(按标的)
+        if lof['arb_by_code']:
+            html += f'<h3>申购套利 · 按标的明细</h3>\n'
+            html += '<table>\n<tr><th>代码</th><th>名称</th><th>申购笔数</th><th>配对笔数</th><th>盈利笔数</th><th>成功率</th><th>套利 P&L</th><th>均持天数</th></tr>\n'
+            for a in lof['arb_by_code']:
+                wr = a['wins'] / a['matched'] * 100 if a['matched'] else 0
+                cls = 'pos' if a['total_pl'] > 0 else 'neg'
+                html += (f"<tr><td>{a['code']}</td><td>{a['name']}</td>"
+                         f"<td>{a['sub_count']}</td><td>{a['matched']}</td><td>{a['wins']}</td>"
+                         f"<td>{wr:.0f}%</td>"
+                         f"<td class='{cls}'>¥{a['total_pl']:+,.0f}</td>"
+                         f"<td>{a['avg_days']:.1f}</td></tr>\n")
+            html += '</table>\n'
+
+        # LOF 盈亏排行(同花顺口径)
+        if lof['pnl_ranking']:
+            pnl_s = lof['pnl_summary']
+            html += f'<h3>LOF 盈亏排行 · 同花顺口径({pnl_s["product_count"]} 个品种, {pnl_s["code_count"]} 个代码)</h3>\n'
+            html += '<table>\n<tr><th>排名</th><th>品种</th><th>当前市值</th><th>{0} YTD</th><th>累计盈亏</th></tr>\n'.format(CUR)
+            for i, p in enumerate(lof['pnl_ranking'], 1):
+                cls_y = 'pos' if p['ytd'] > 0 else 'neg'
+                cls_c = 'pos' if p['cum'] > 0 else 'neg'
+                html += (f"<tr><td>{i}</td><td>{p['name']}</td>"
+                         f"<td>{fmt_money(p['mv'])}</td>"
+                         f"<td class='{cls_y}'>¥{p['ytd']:+,.0f}</td>"
+                         f"<td class='{cls_c}'>¥{p['cum']:+,.0f}</td></tr>\n")
+            # 合计行
+            cls_ty = 'pos' if pnl_s['total_ytd'] > 0 else 'neg'
+            cls_tc = 'pos' if pnl_s['total_cum'] > 0 else 'neg'
+            html += (f"<tr class='total'><td>-</td><td>合计</td><td>-</td>"
+                     f"<td class='{cls_ty}'>¥{pnl_s['total_ytd']:+,.0f}</td>"
+                     f"<td class='{cls_tc}'>¥{pnl_s['total_cum']:+,.0f}</td></tr>\n")
+            html += '</table>\n'
+
     html += f"""
 <h2>已知局限</h2>
 <ol>

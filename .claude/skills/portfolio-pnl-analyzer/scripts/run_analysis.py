@@ -94,13 +94,14 @@ def main():
     env['PORTFOLIO_TODAY'] = args.today
 
     print('\n══════════════════════════════════════════')
-    print('  Pipeline 启动 · 6 步')
+    print('  Pipeline 启动 · 7 步')
     print('══════════════════════════════════════════')
     run(f'python3 "{HERE}/01_build_snapshots.py"', env)
     run(f'python3 "{HERE}/02_fetch_prices.py"', env)
     run(f'python3 "{HERE}/03b_generate_registry.py"', env)
     run(f'python3 "{HERE}/04_calc_pnl.py"', env)
     run(f'python3 "{HERE}/06_build_monthly_db.py"', env)
+    run(f'python3 "{HERE}/07_lof_analysis.py"', env)
     run(f'python3 "{HERE}/05_report.py"', env)
 
     md = work / 'reports' / f'analysis-{args.today}.md'
