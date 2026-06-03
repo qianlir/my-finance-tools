@@ -228,14 +228,23 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
         updated = 0
         skipped = 0
 
+        import bisect
+        def _get_close(d):
+            if d in idx_map:
+                return idx_map[d]
+            pos = bisect.bisect_right(idx_dates_list, d) - 1
+            return idx_map[idx_dates_list[pos]] if pos >= 0 else None
+
         # 找前一个 NAV 变化的 A 股日期
         prev_nav = None
         prev_date = None
+        prev_est = None  # 上一条的 estimated_nav
 
         for T in all_etf_dates:
             if T not in need_fill:
                 prev_nav = etf_map[T]
                 prev_date = T
+                prev_est = etf_map[T]  # 不需要回填的天, est=nav
                 continue
 
             # NAV 没变 → 直接复制
@@ -246,24 +255,20 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
                         WHERE date = ? AND code = ?
                     """, (round(etf_map[T], 4), T, code))
                 updated += 1
+                prev_est = etf_map[T]
                 continue
 
             est = None
-
-            # 取 T 和 prev_date 对应的美股收盘价
-            # 优先直接匹配, A股调休日 fallback 到前一个美股交易日
-            import bisect
-            def _get_close(d):
-                if d in idx_map:
-                    return idx_map[d]
-                pos = bisect.bisect_right(idx_dates_list, d) - 1
-                return idx_map[idx_dates_list[pos]] if pos >= 0 else None
 
             c_T = _get_close(T)
             c_prev = _get_close(prev_date) if prev_date else None
 
             if prev_nav and c_T and c_prev:
                 est = prev_nav * c_T / c_prev
+
+            # 与上一条 estimated_nav 偏差 > 5% 时, 用上一条 (QDII 延迟导致错位)
+            if est and prev_est and abs(est / prev_est - 1) > 0.05:
+                est = prev_est
 
             if est and abs(est / etf_map[T] - 1) < 0.5:
                 if not dry_run:
@@ -272,6 +277,7 @@ def backfill(method_filter=None, code_filter=None, dry_run=False, force=False):
                         WHERE date = ? AND code = ?
                     """, (round(est, 4), T, code))
                 updated += 1
+                prev_est = est
             else:
                 skipped += 1
 

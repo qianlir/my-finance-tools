@@ -411,6 +411,10 @@ def get_futures_from_sina(symbol):
                 price = float(fields[0])
                 prev_close = float(fields[7])
                 change_pct = (price - prev_close) / prev_close * 100
+                # Sanity check: 单日变动超过 8% 视为数据异常（跳过）
+                if abs(change_pct) > 8:
+                    print(f"  ⚠ {symbol} 期货数据异常: {price}/{prev_close} = {change_pct:+.2f}%, 跳过")
+                    return None
                 return {
                     'price': price,
                     'prev_close': prev_close,
@@ -420,6 +424,37 @@ def get_futures_from_sina(symbol):
         return None
     except Exception:
         return None
+
+
+def _validate_futures_against_db(data: dict, db_col: str, label: str,
+                                  max_drift: float = 0.10) -> dict:
+    """校验期货/指数价格是否偏离 DB 历史值过大。
+
+    用最近 3 条的中位数做基准（防止最后一条本身就是坏值导致死锁）。
+    如果新价格偏离中位数超过 max_drift, 判定为数据源异常, 返回 None。
+    """
+    if not data or not data.get('price'):
+        return data
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute(f"""
+            SELECT {db_col} FROM futures_data
+            WHERE {db_col} IS NOT NULL AND {db_col} > 0
+            ORDER BY date DESC LIMIT 3
+        """).fetchall()
+        conn.close()
+        vals = sorted(float(r[0]) for r in rows if r[0])
+        if vals:
+            # 中位数: 3条取中间, 2条取均值, 1条取唯一值
+            median = vals[len(vals) // 2]
+            drift = abs(data['price'] - median) / median
+            if drift > max_drift:
+                print(f"  ⚠ {label} 价格 {data['price']:.1f} 偏离基准 "
+                      f"{median:.1f} 达 {drift:.1%}, 超过 {max_drift:.0%} 阈值, 丢弃")
+                return None
+    except Exception:
+        pass  # DB 读取失败不阻塞正常流程
+    return data
 
 
 def capture_futures_anchor():
@@ -511,13 +546,18 @@ def get_realtime_futures():
     if si_data:
         futures_data['SI'] = si_data
 
-    # NK期货 (日经225)
+    # NK期货 (日经225, 新浪)
     nk_data = get_futures_from_sina('NK')
+    if nk_data:
+        nk_data = _validate_futures_against_db(nk_data, 'nk_close', 'NK', max_drift=0.10)
     if nk_data:
         futures_data['NK'] = nk_data
 
     # 日经225指数（东方财富，用于估算净值，比期货更准确）
+    # ⚠ 2026-06-01 东方财富在周日返回 73282 异常值（实际 ~66934），需 sanity check
     nk_idx = get_nikkei_index_realtime()
+    if nk_idx:
+        nk_idx = _validate_futures_against_db(nk_idx, 'nk_idx_close', 'N225', max_drift=0.08)
     if nk_idx:
         futures_data['NK_IDX'] = nk_idx
 
@@ -561,12 +601,12 @@ def get_nikkei_index_realtime():
       1. 东方财富 push2 API (requests)
       2. 东方财富 push2 API (curl, 绕过代理)
       3. 东方财富历史K线最新一条
-      4. NK期货变动率 × DB中最近的指数收盘价（需要已有锚点）
+      4. (已废弃) NK期货变动率外推
 
     返回: {price, prev_close, change_pct, source} 或 None
     """
     for fn in [_nk_idx_from_eastmoney, _nk_idx_from_eastmoney_curl,
-               _nk_idx_from_eastmoney_kline, _nk_idx_from_futures_extrapolate]:
+               _nk_idx_from_eastmoney_kline]:
         result = fn()
         if result:
             return result
@@ -2133,6 +2173,16 @@ def compute_and_save_estimated_nav(date):
             gz = get_fundgz_nav(code)
             if gz and gz.get('estimated_nav') and gz['estimated_nav'] > 0:
                 est_nav = gz['estimated_nav']
+
+        # 与上一条 estimated_nav 偏差 > 5% 时, 用上一条 (QDII 延迟导致错位)
+        if est_nav and est_nav > 0:
+            prev_est = conn.execute("""
+                SELECT estimated_nav FROM etf_data
+                WHERE code = ? AND date < ? AND estimated_nav IS NOT NULL AND estimated_nav > 0
+                ORDER BY date DESC LIMIT 1
+            """, (code, date)).fetchone()
+            if prev_est and prev_est['estimated_nav'] and abs(est_nav / prev_est['estimated_nav'] - 1) > 0.05:
+                est_nav = prev_est['estimated_nav']
 
         if est_nav and est_nav > 0 and abs(est_nav - row['nav']) / row['nav'] < 0.5:
             conn.execute("""
