@@ -380,62 +380,25 @@ def get_previous_data() -> Tuple[Dict[str, float], str]:  # 返回 (价格字典
 
 
 def _get_nav_history(code: str, days: int = 30) -> list:
-    """获取最近N天的净值 vs 估算净值历史, 供详情页展示
-
-    美股ETF净值时差处理:
-      T日公布的净值 = T-1日美股收盘净值, 应放在T-1行
-      T日估算净值 = 当天盘中计算, 放在T日行
-      这样同一行的 nav 和 est 都属于同一个A股交易日, 可以比较误差
-    """
+    """获取最近N天的净值 vs 估算净值历史, 供详情页展示"""
     conn = get_db_connection()
     rows = conn.execute("""
-        SELECT date, nav, nav_date, estimated_nav FROM etf_data
+        SELECT date, nav, estimated_nav FROM etf_data
         WHERE code = ? AND nav IS NOT NULL
         ORDER BY date DESC LIMIT ?
-    """, (code, days + 1)).fetchall()  # 多取一条用于回退
+    """, (code, days)).fetchall()
     conn.close()
-    if not rows:
-        return []
-
-    # rows 按日期降序, 转为升序处理
-    rows = list(reversed(rows))
-
     result = []
-    for i, r in enumerate(rows):
-        # 当天的估算净值
-        est = r['estimated_nav']
-
-        # 公布净值回退: 下一天记录中的 nav 如果变化了, 就是今天的实际净值
-        # (因为基金公司在T+1公布T日净值)
-        actual_nav = None
-        if i + 1 < len(rows):
-            next_nav = rows[i + 1]['nav']
-            next_nav_date = rows[i + 1]['nav_date']
-            if next_nav != r['nav']:
-                # 净值变了 = 新净值公布, 属于今天
-                actual_nav = next_nav
-            elif next_nav_date and next_nav_date != r['nav_date']:
-                # nav_date 变了 = 虽然净值数值相同但确实是新公布的
-                actual_nav = next_nav
-            # 否则 nav 和 nav_date 都没变 = 尚未公布新净值, actual_nav = None
-        # 最后一天 (今天): 净值尚未公布
-        # actual_nav remains None
-
-        # 跳过 nav 和 est 都为空的行（历史无估算数据）
-        if not actual_nav and not est:
-            continue
-
-        err = round((est / actual_nav - 1) * 100, 2) if est and actual_nav and actual_nav > 0 else None
+    for r in rows:
+        nav, est = r['nav'], r['estimated_nav']
+        err = round((est / nav - 1) * 100, 2) if est and nav and nav > 0 else None
         result.append({
             "date": r['date'],
-            "nav": round(actual_nav, 4) if actual_nav else None,
+            "nav": round(nav, 4),
             "est": round(est, 4) if est else None,
             "err": err,
         })
-
-    # 去掉多取的第一条 (只用来给第二条提供 nav 回退参考)
-    if len(result) > days:
-        result = result[1:]
+    result.reverse()
 
     return result
 
@@ -1297,6 +1260,10 @@ def analyze_etfs(index_type: str) -> Tuple[List[Dict], List[str], Dict]:
             rep_nav_date = info['nav_date']
 
     futures_ratio = (current_futures_price / nav_date_close) if nav_date_close and current_futures_price else 0
+    # Sanity guard: 单日 ratio 超过 ±8% 几乎不可能, 视为数据异常
+    if futures_ratio and abs(futures_ratio - 1) > 0.08:
+        print(f"  ⚠ {index_type} 期货比值 {futures_ratio:.4f} 偏离过大, 回退为 1.0")
+        futures_ratio = 0  # 不做期货修正
 
     # 获取期货显示数据
     futures_display = get_futures_info()
