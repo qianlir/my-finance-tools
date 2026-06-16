@@ -2440,6 +2440,17 @@ def init_database():
         except Exception:
             pass
 
+    # 添加白银 SI 字段
+    for col in ['si_close', 'si_prev_close', 'si_change_pct']:
+        try:
+            cursor.execute(f"ALTER TABLE futures_data ADD COLUMN {col} REAL")
+        except Exception:
+            pass
+    try:
+        cursor.execute("ALTER TABLE futures_data ADD COLUMN si_source TEXT")
+    except Exception:
+        pass
+
     # 添加 SOX 半导体指数字段
     for col in ['sox_idx_close', 'sox_idx_prev_close', 'sox_idx_change_pct']:
         try:
