@@ -606,7 +606,7 @@ def get_nikkei_index_realtime():
     返回: {price, prev_close, change_pct, source} 或 None
     """
     for fn in [_nk_idx_from_eastmoney, _nk_idx_from_eastmoney_curl,
-               _nk_idx_from_eastmoney_kline]:
+               _nk_idx_from_eastmoney_kline, _nk_idx_from_sina]:
         result = fn()
         if result:
             return result
@@ -670,6 +670,27 @@ def _nk_idx_from_eastmoney_kline():
     except Exception:
         pass
     return None
+
+
+def _nk_idx_from_sina():
+    """源4: 新浪财经实时行情 (东方财富全挂时的 fallback)"""
+    try:
+        url = 'https://hq.sinajs.cn/list=b_NKY'
+        resp = requests.get(url, timeout=8, headers={
+            'Referer': 'https://finance.sina.com.cn',
+            'User-Agent': 'Mozilla/5.0',
+        })
+        line = resp.text.strip()
+        parts = line.split('"')[1].split(',')
+        price = float(parts[1])
+        prev_close = float(parts[9])
+        if price <= 0 or prev_close <= 0:
+            return None
+        change_pct = (price - prev_close) / prev_close * 100
+        return {'price': price, 'prev_close': prev_close,
+                'change_pct': change_pct, 'source': 'sina'}
+    except Exception:
+        return None
 
 
 def _nk_idx_from_futures_extrapolate():
@@ -995,7 +1016,7 @@ def backfill_futures_history(days=30):
     只回补字段为空的历史行，今日实时数据不覆盖。
     """
     all_hist = {}
-    for sym in ['NQ', 'ES', 'YM', 'NK']:
+    for sym in ['NQ', 'ES', 'YM', 'NK', 'GC', 'CL']:
         all_hist[sym] = get_futures_history_from_sina(sym)
 
     if not any(all_hist.values()):
@@ -1029,26 +1050,34 @@ def backfill_futures_history(days=30):
                     nq_close = COALESCE(?, nq_close), nq_prev_close = COALESCE(?, nq_prev_close),
                     es_close = COALESCE(?, es_close), es_prev_close = COALESCE(?, es_prev_close),
                     ym_close = COALESCE(?, ym_close), ym_prev_close = COALESCE(?, ym_prev_close),
-                    nk_close = COALESCE(?, nk_close), nk_prev_close = COALESCE(?, nk_prev_close)
+                    nk_close = COALESCE(?, nk_close), nk_prev_close = COALESCE(?, nk_prev_close),
+                    gc_close = COALESCE(?, gc_close), gc_prev_close = COALESCE(?, gc_prev_close),
+                    cl_close = COALESCE(?, cl_close), cl_prev_close = COALESCE(?, cl_prev_close)
                 WHERE date = ?
             """, (date_str,
                   rec.get('nq_close'), rec.get('nq_prev_close'),
                   rec.get('es_close'), rec.get('es_prev_close'),
                   rec.get('ym_close'), rec.get('ym_prev_close'),
                   rec.get('nk_close'), rec.get('nk_prev_close'),
+                  rec.get('gc_close'), rec.get('gc_prev_close'),
+                  rec.get('cl_close'), rec.get('cl_prev_close'),
                   date_str))
         else:
             cursor.execute("""
                 INSERT INTO futures_data
                 (date, us_date, nq_close, nq_prev_close, es_close, es_prev_close,
                  ym_close, ym_prev_close, nk_close, nk_prev_close,
+                 gc_close, gc_prev_close, cl_close, cl_prev_close,
                  nq_source, es_source, ym_source, nk_source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sina_hist', 'sina_hist', 'sina_hist', 'sina_hist')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        'sina_hist', 'sina_hist', 'sina_hist', 'sina_hist')
             """, (date_str, date_str,
                   rec.get('nq_close'), rec.get('nq_prev_close'),
                   rec.get('es_close'), rec.get('es_prev_close'),
                   rec.get('ym_close'), rec.get('ym_prev_close'),
-                  rec.get('nk_close'), rec.get('nk_prev_close')))
+                  rec.get('nk_close'), rec.get('nk_prev_close'),
+                  rec.get('gc_close'), rec.get('gc_prev_close'),
+                  rec.get('cl_close'), rec.get('cl_prev_close')))
         updated += 1
 
     conn.commit()
@@ -1993,7 +2022,14 @@ def _find_nav_anchor(conn, code, date, close_col, symbol):
 
     返回 (anchor_nav, anchor_futures_close) 或 (None, None)。
     公式: est_nav = anchor_nav × current_futures / anchor_futures_close
+
+    日经/DAX/CAC/SENSEX: T日NAV = T日收盘 → 锚点用 date <= d
+    美股期货 (NQ/ES/YM/GC/CL/SOX): T日NAV = T-1收盘 → 锚点用 date < d
     """
+    # 同日收盘的市场: 日/欧/印 在北京时间当天收盘
+    same_day = symbol in ('N225', 'GDAXI', 'CAC', 'SENSEX')
+    date_op = '<=' if same_day else '<'
+
     # 取最近 20 个有 NAV 的 A 股交易日 (多取几天, 需要相邻比较)
     candidates = conn.execute("""
         SELECT date, nav FROM etf_data
@@ -2015,11 +2051,10 @@ def _find_nav_anchor(conn, code, date, close_col, symbol):
             if row['nav'] == prev_nav:
                 continue  # NAV 没变, 净值未公布, 跳过
 
-        # 条件 2: 找 t-k 之前最近的市场交易日 (不一定是前一个日历日,
-        #         遇到周末/假日会跳过, 如周二的NAV对应上周五的收盘)
+        # 条件 2: 找对应市场的收盘价
         fc_row = conn.execute(f"""
             SELECT date, {close_col} FROM futures_data
-            WHERE date < ? AND {close_col} IS NOT NULL AND {close_col} > 0
+            WHERE date {date_op} ? AND {close_col} IS NOT NULL AND {close_col} > 0
             ORDER BY date DESC LIMIT 5
         """, (d,)).fetchall()
 
@@ -2031,20 +2066,22 @@ def _find_nav_anchor(conn, code, date, close_col, symbol):
 
 
 def _get_current_futures_price(conn, close_col):
-    """获取最新期货/指数价格: 优先真收盘, fallback prev×(1+change%)。"""
+    """获取最新期货/指数价格: 优先真收盘, fallback prev×(1+change%)。
+
+    查最近 5 行而非仅最新 1 行, 避免当天尚未写入时返回 None。
+    """
     prev_col = close_col.replace('_close', '_prev_close')
     change_col = close_col.replace('_close', '_change_pct')
-    cur_row = conn.execute(f"""
+    rows = conn.execute(f"""
         SELECT {close_col}, {prev_col}, {change_col} FROM futures_data
-        ORDER BY date DESC LIMIT 1
-    """).fetchone()
-    if not cur_row:
-        return None
-    if cur_row[close_col]:
-        return cur_row[close_col]
-    if cur_row[prev_col]:
-        chg = cur_row[change_col] or 0
-        return cur_row[prev_col] * (1 + chg / 100)
+        ORDER BY date DESC LIMIT 5
+    """).fetchall()
+    for cur_row in rows:
+        if cur_row[close_col]:
+            return cur_row[close_col]
+        if cur_row[prev_col]:
+            chg = cur_row[change_col] or 0
+            return cur_row[prev_col] * (1 + chg / 100)
     return None
 
 
@@ -2078,7 +2115,12 @@ def estimate_nav_for_etf(code, nav, nav_date, estimate_method, estimate_symbol):
         return nav
 
     if estimate_method in ('futures', 'index'):
-        close_col = _SYMBOL_TO_CLOSE_COL.get(estimate_symbol)
+        # 日经非盘中: 用期货列代替指数 (指数不更新, 期货交易时间更长)
+        _nk_open = 8 <= datetime.now().hour < 14
+        if estimate_symbol == 'N225' and not _nk_open:
+            close_col = 'nk_close'
+        else:
+            close_col = _SYMBOL_TO_CLOSE_COL.get(estimate_symbol)
         if not close_col:
             return nav
 
@@ -2137,13 +2179,29 @@ def compute_and_save_estimated_nav(date):
     """, (date,)).fetchall()
 
     # 预取各 symbol 的当前期货价格 (避免重复查询)
+    # 回算历史日期: 用那天的收盘价 (不是今天的实时价)
+    # 日经: 盘中用指数, 非盘中用 NK 期货 (期货交易时间更长, 指数不更新)
+    today = datetime.now().strftime('%Y-%m-%d')
+    is_backfill = (date < today)
+    _nk_market_open = 8 <= datetime.now().hour < 14
     current_prices = {}
     for fc in fc_rows:
         sym = fc['estimate_symbol']
         if sym not in current_prices and fc['estimate_method'] in ('futures', 'index'):
             col = _SYMBOL_TO_CLOSE_COL.get(sym)
-            if col:
-                current_prices[sym] = _get_current_futures_price(conn, col)
+            if is_backfill and col:
+                # 回算: 直接用那天的收盘价
+                row = conn.execute(f"""
+                    SELECT {col} FROM futures_data
+                    WHERE date <= ? AND {col} IS NOT NULL AND {col} > 0
+                    ORDER BY date DESC LIMIT 1
+                """, (date,)).fetchone()
+                current_prices[sym] = row[0] if row else None
+            else:
+                if sym == 'N225' and not _nk_market_open:
+                    col = 'nk_close'  # 非盘中: 用期货代替指数
+                if col:
+                    current_prices[sym] = _get_current_futures_price(conn, col)
 
     updated = 0
     for row in etf_rows:
@@ -2157,7 +2215,11 @@ def compute_and_save_estimated_nav(date):
         est_nav = None
 
         if method in ('futures', 'index'):
-            close_col = _SYMBOL_TO_CLOSE_COL.get(symbol)
+            # 回算: 用原始列 (指数); 实时非盘中: 用期货列
+            if is_backfill or (symbol != 'N225') or _nk_market_open:
+                close_col = _SYMBOL_TO_CLOSE_COL.get(symbol)
+            else:
+                close_col = 'nk_close'  # 日经非盘中: anchor+current 都用期货
             cur_price = current_prices.get(symbol)
             if close_col and cur_price:
                 anchor_nav, anchor_close = _find_nav_anchor(
@@ -2174,17 +2236,10 @@ def compute_and_save_estimated_nav(date):
             if gz and gz.get('estimated_nav') and gz['estimated_nav'] > 0:
                 est_nav = gz['estimated_nav']
 
-        # 与上一条 estimated_nav 偏差 > 5% 时, 用上一条 (QDII 延迟导致错位)
-        if est_nav and est_nav > 0:
-            prev_est = conn.execute("""
-                SELECT estimated_nav FROM etf_data
-                WHERE code = ? AND date < ? AND estimated_nav IS NOT NULL AND estimated_nav > 0
-                ORDER BY date DESC LIMIT 1
-            """, (code, date)).fetchone()
-            if prev_est and prev_est['estimated_nav'] and abs(est_nav / prev_est['estimated_nav'] - 1) > 0.05:
-                est_nav = prev_est['estimated_nav']
-
-        if est_nav and est_nav > 0 and abs(est_nav - row['nav']) / row['nav'] < 0.5:
+        # 估算值与当日确认净值偏差 > 15% 时丢弃（防止脏数据入库）
+        # 注: 不再与前一天估算值比较 — 那会在市场大跌时造成死锁
+        #     （正确估算被当成异常，旧值一直传染）
+        if est_nav and est_nav > 0 and abs(est_nav - row['nav']) / row['nav'] < 0.15:
             conn.execute("""
                 UPDATE etf_data SET estimated_nav = ? WHERE date = ? AND code = ?
             """, (round(est_nav, 4), date, code))
@@ -2857,7 +2912,9 @@ def update_realtime():
         vxn_prev_close = vxn.get('prev_close')
         vxn_change_pct = vxn.get('change_pct')
 
-        if nq_change is not None or es_change is not None or ym_change is not None or nk_change is not None:
+        has_futures = nq_change is not None or es_change is not None or ym_change is not None or nk_change is not None
+        has_index = nk_idx_close is not None or dax_idx_close is not None or cac_idx_close is not None or sensex_idx_close is not None
+        if has_futures or has_index:
             us_date = get_us_trading_date()
             if save_futures_data(today, nq_change, es_change, ym_change,
                                  nq_close=nq_close, es_close=es_close, ym_close=ym_close,
