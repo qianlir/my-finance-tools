@@ -496,7 +496,16 @@ def simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, co
         switched = 0
         switch_from = None
 
-        if best_code != holding_code and (best_score - holding_score) >= threshold:
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        is_today = (date == today_str)
+        if is_today:
+            now = datetime.now()
+            t = now.hour * 60 + now.minute
+            market_open = (now.weekday() < 5 and 9 * 60 + 31 <= t <= 14 * 60 + 57)
+        else:
+            market_open = True
+
+        if best_code != holding_code and (best_score - holding_score) >= threshold and market_open:
             switch_from = holding_code
             old_premium = holding_info['premium_rate']
             cash = shares * holding_info['price']
