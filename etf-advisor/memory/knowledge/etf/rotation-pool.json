@@ -14,7 +14,9 @@
     "constraints": "a+b+c+d=1, abcd≥0.1, T∈[0.5,1.0], 不扣交易成本, 等权tracking_vol",
     "data_start": "2025-01-01",
     "vol_window_days": 90,
-    "vol_method": "equal_weight"
+    "vol_method": "equal_weight",
+    "use_report_score_from": "2026-07-10",
+    "use_report_score_note": "从此日期起, 轮动分=推荐分(所见即所得). 历史轮动记录不变."
   },
   "NASDAQ": {
     "pool": {
@@ -26,6 +28,7 @@
     "default_bonus": -0.5,
     "threshold": 0.90,
     "formula": { "a": 0.10, "b": 0.70, "c": 0.10, "d": 0.10 },
+    "use_report_score_from": "2026-07-10",
     "note": "纳指 4 只精选池. b=0.7 主导(历史超额溢价). 穷举最优 T∈[0.5,1.0]"
   },
   "SP500": {
@@ -36,6 +39,7 @@
     "default_bonus": -0.5,
     "threshold": 0.50,
     "formula": { "a": 0.10, "b": 0.70, "c": 0.10, "d": 0.10 },
+    "use_report_score_from": "2026-07-10",
     "note": "标普 2 只精选池 (南方+国泰). b=0.7 抓国泰 159612 高溢价回归"
   },
   "NIKKEI": {
@@ -48,6 +52,7 @@
     "default_bonus": -0.5,
     "threshold": 1.00,
     "formula": { "a": 0.30, "b": 0.30, "c": 0.10, "d": 0.30 },
+    "use_report_score_from": "2026-07-10",
     "note": "日经全池 4 只. 均衡型 a=b=d=0.3, 波动+动量+超额. 穷举最优"
   },
   "DAX": {
@@ -58,6 +63,7 @@
     "default_bonus": -0.5,
     "threshold": 0.50,
     "formula": { "a": 0.10, "b": 0.60, "c": 0.20, "d": 0.10 },
+    "use_report_score_from": "2026-07-10",
     "note": "德国 2 只. B方案(积极套利): b=0.6 重超额溢价, T=0.5, 14次换仓. +39.20%"
   }
 }

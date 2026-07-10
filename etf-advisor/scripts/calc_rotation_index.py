@@ -5,10 +5,9 @@ calc_rotation_index.py — 多指数轮动指数计算
 
 从 etf_data 历史数据计算每日评分，模拟轮动策略，输出 rotation_index 表。
 
-评分公式:
-  Score = NAV涨幅×10% + (-综合超额溢价)×80% + (-当前溢价)×10% + 推荐加分(±bonus)
-  池内ETF: +bonus (从 rotation-pool.json 读取)
-  池外ETF: default_bonus (通常 -0.5)
+评分公式 (use_report_score_from 之后, 与页面推荐分一致):
+  Score = NAV超额×10% + (-综合超额溢价)×80% + (-当前溢价)×10% + 1Y均溢价×10% + bonus
+  当日 pool_score 由 report.json 覆盖 (含期货修正后的 display_premium)
   切换阈值: 最优分值 - 持仓分值 >= T (从 rotation-pool.json 读取)
 
 支持指数: NASDAQ, SP500, NIKKEI, DAX
@@ -266,6 +265,9 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
         F = nav_excess·a + (-composite)·b + (-premium)·c + tracking_vol·d
         pool_score = F + bonus
 
+    从 use_report_score_from 日期起, 改用推荐分公式 (所见即所得):
+        score = excess_nav·0.10 + (-composite)·0.80 + (-premium)·0.10 + avg_1y·0.10 + bonus
+
     abcd 从 rotation-pool.json 的 formula 字段读取, 满足 a+b+c+d=1.
     tracking_vol = 90天滚动 stdev(每日涨跌 - 池均值涨跌), 反映套利空间.
     """
@@ -276,6 +278,7 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
     w_excess = formula.get('b', 0.70)
     w_premium = formula.get('c', 0.10)
     w_vol = formula.get('d', 0.10)
+    cutover_date = pool_cfg.get('use_report_score_from')
 
     pool_codes_set = set(pool.keys()) if pool else set(codes)
 
@@ -337,15 +340,26 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
             nav_excess = nav_return_1y - nav_pool_mean
             tvol = tracking_vols.get(code, 0.0)
 
-            # 4 因子原始值公式 (无标准化)
-            score = (
-                nav_excess * w_nav
-                + (-composite) * w_excess
-                + (-premium_rate) * w_premium
-                + tvol * w_vol
-            )
-
             bonus = pool[code]['bonus'] if code in pool else default_bonus
+
+            if cutover_date and date >= cutover_date:
+                # 推荐分公式 (与页面显示一致)
+                avg_1y = compute_rolling_avg(plist, current_idx, 365)
+                score = (
+                    nav_excess * 0.10
+                    + (-composite) * 0.80
+                    + (-premium_rate) * 0.10
+                    + (avg_1y or 0) * 0.10
+                )
+            else:
+                # 历史: 4 因子公式
+                score = (
+                    nav_excess * w_nav
+                    + (-composite) * w_excess
+                    + (-premium_rate) * w_premium
+                    + tvol * w_vol
+                )
+
             pool_score = score + bonus
 
             rows_to_insert.append((
@@ -360,6 +374,43 @@ def compute_all_scores(conn, index_type, codes, trading_dates, premium_by_code, 
     """, rows_to_insert)
     conn.commit()
     print(f"  rotation_scores[{index_type}]: {len(rows_to_insert)} rows written")
+
+    if cutover_date:
+        _override_today_from_report(conn, index_type)
+
+
+def _override_today_from_report(conn, index_type):
+    """用 report.json 的推荐分覆盖今天的 pool_score。
+
+    report.json 的 score 用了期货修正后的 display_premium，
+    比 rotation_scores 用 raw premium_rate 计算的更准确。
+    """
+    report_path = PROJECT_ROOT / 'data' / 'report.json'
+    if not report_path.exists():
+        return
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    try:
+        with open(report_path) as f:
+            report = json.load(f)
+    except Exception:
+        return
+
+    for section in report.get('sections', []):
+        if section['index_type'] != index_type:
+            continue
+        updated = 0
+        for etf in section['etfs']:
+            r = conn.execute(
+                "UPDATE rotation_scores SET pool_score = ? WHERE index_type = ? AND code = ? AND date = ?",
+                (etf['score'], index_type, etf['code'], today)
+            )
+            updated += r.rowcount
+        if updated:
+            conn.commit()
+            print(f"  {index_type}: 今日 pool_score 已用 report.json 推荐分覆盖 ({updated} ETFs)")
+        break
 
 
 def simulate_rotation(conn, index_type, strategy_name, threshold, pool_codes, code_to_name, initial=INITIAL_VALUE):
